@@ -5,7 +5,6 @@ import 'app.dart';
 import 'core/network/dio_client.dart';
 import 'core/storage/storage_service.dart';
 import 'features/auth/providers/auth_provider.dart';
-import 'features/plate/providers/plate_provider.dart';
 import 'shared/providers/theme_provider.dart';
 
 final dioClientProvider = Provider<DioClient>((ref) => DioClient());
@@ -16,11 +15,6 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   final dio = ref.watch(dioClientProvider);
   final storage = ref.watch(storageServiceProvider);
   return AuthNotifier(storage, dio);
-});
-
-final plateProvider = StateNotifierProvider<PlateNotifier, PlateState>((ref) {
-  final dio = ref.watch(dioClientProvider);
-  return PlateNotifier(dio);
 });
 
 final themeModeProvider = StateNotifierProvider<ThemeModeNotifier, ThemeMode>((ref) {
