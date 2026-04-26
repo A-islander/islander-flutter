@@ -34,7 +34,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final res = await dio.register();
       final data = res.data;
       if (data is Map && data['code'] == 200 && data['data'] != null) {
-        final token = data['data']['Token']?.toString() ?? '';
+        final token = data['data']['token']?.toString() ?? '';
         if (token.isNotEmpty) {
           await ref.read(authProvider.notifier).setToken(token);
           setState(() => _tokenController.text = token);
@@ -62,8 +62,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final data = res.data;
       if (data is Map && data['code'] == 200 && data['data'] != null) {
         final d = data['data'] as Map;
-        final name = d['Name']?.toString() ?? '';
-        final userId = d['Id'] is int ? d['Id'] as int : int.tryParse(d['Id']?.toString() ?? '') ?? 0;
+        final name = d['name']?.toString() ?? '';
+        final userId = d['id'] is int ? d['id'] as int : int.tryParse(d['id']?.toString() ?? '') ?? 0;
         await ref.read(authProvider.notifier).setToken(
               ref.read(authProvider).token,
               name: name,
@@ -79,11 +79,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final dio = ref.read(dioClientProvider);
       final res = await dio.getUserList(page: 1);
       final data = res.data;
-      if (data is Map && data['code'] == 200 && data['data'] is List) {
+      if (data is Map && data['code'] == 200) {
+        final rawData = data['data'];
+        final List<dynamic> rawList;
+        if (rawData is Map) {
+          rawList = (rawData['list'] as List?) ?? [];
+        } else if (rawData is List) {
+          rawList = rawData;
+        } else {
+          rawList = [];
+        }
         setState(() {
-          _userPosts = (data['data'] as List)
-              .map((e) => Post.fromJson(e as Map<String, dynamic>))
-              .toList();
+          _userPosts = rawList.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
         });
       }
     } catch (_) {}

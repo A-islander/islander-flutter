@@ -24,14 +24,14 @@ class AppColors {
   static const Color lightBorderTertiary = Color(0xFFE4E7ED);
 
   // Dark theme
-  static const Color darkBgPrimary = Color(0xFF0D1117);
-  static const Color darkBgSecondary = Color(0xFF0D1117);
-  static const Color darkBgTertiary = Color(0xFF161B22);
-  static const Color darkTextPrimary = Color(0xFFE6EDF3);
+  static const Color darkBgPrimary = Color(0xFF1A1F2E);
+  static const Color darkBgSecondary = Color(0xFF1A1F2E);
+  static const Color darkBgTertiary = Color(0xFF252B3B);
+  static const Color darkTextPrimary = Color(0xFFE4E7ED);
   static const Color darkTextSecondary = Color(0xFF8B949E);
   static const Color darkTextTertiary = Color(0xFF484F58);
-  static const Color darkTextInverse = Color(0xFF0D1117);
-  static const Color darkBorderPrimary = Color(0xFF21262D);
+  static const Color darkTextInverse = Color(0xFFFFFFFF);
+  static const Color darkBorderPrimary = Color(0xFF2E3342);
   static const Color darkBorderSecondary = Color(0xFF30363D);
-  static const Color darkBorderTertiary = Color(0xFF161B22);
+  static const Color darkBorderTertiary = Color(0xFF252B3B);
 }

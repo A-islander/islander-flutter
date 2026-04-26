@@ -147,10 +147,9 @@ class _PostCardState extends ConsumerState<PostCard> {
         bottom: 8,
       ),
       decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
         border: Border.all(
-          color: isQuoted
-              ? theme.colorScheme.primary.withValues(alpha: 0.5)
-              : theme.colorScheme.primary,
+          color: theme.colorScheme.primary.withValues(alpha: isQuoted ? 0.5 : 0.8),
           width: isQuoted ? 1.5 : 1,
         ),
         borderRadius: BorderRadius.circular(8),

@@ -94,10 +94,16 @@ class ReplyListNotifier extends StateNotifier<ReplyListState> {
       final res = await _dio.getForumList(postId: postId, page: page);
       final data = res.data;
       if (data is Map && data['code'] == 200) {
-        final list = (data['data'] as List?)
-                ?.map((e) => Post.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            [];
+        final rawData = data['data'];
+        final List<dynamic> rawList;
+        if (rawData is Map) {
+          rawList = (rawData['list'] as List?) ?? [];
+        } else if (rawData is List) {
+          rawList = rawData;
+        } else {
+          rawList = [];
+        }
+        final list = rawList.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
         _currentPage = page;
         _hasMore = list.length >= 20;
         state = state.copyWith(
@@ -123,11 +129,11 @@ class ReplyListNotifier extends StateNotifier<ReplyListState> {
 }
 
 final postDetailProvider =
-    StateNotifierProvider.autoDispose<PostDetailNotifier, PostDetailState>((ref) {
+    StateNotifierProvider<PostDetailNotifier, PostDetailState>((ref) {
   return PostDetailNotifier(ref.watch(dioClientProvider));
 });
 
 final replyListProvider =
-    StateNotifierProvider.autoDispose<ReplyListNotifier, ReplyListState>((ref) {
+    StateNotifierProvider<ReplyListNotifier, ReplyListState>((ref) {
   return ReplyListNotifier(ref.watch(dioClientProvider));
 });

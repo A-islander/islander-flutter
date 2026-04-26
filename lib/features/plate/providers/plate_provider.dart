@@ -94,10 +94,16 @@ class PostListNotifier extends StateNotifier<PostListState> {
 
       final data = res.data;
       if (data is Map && data['code'] == 200) {
-        final list = (data['data'] as List?)
-                ?.map((e) => Post.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            [];
+        final rawData = data['data'];
+        final List<dynamic> rawList;
+        if (rawData is Map) {
+          rawList = (rawData['list'] as List?) ?? [];
+        } else if (rawData is List) {
+          rawList = rawData;
+        } else {
+          rawList = [];
+        }
+        final list = rawList.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
         _currentPage = page;
         _hasMore = list.length >= 20;
         state = state.copyWith(
@@ -126,6 +132,6 @@ final plateProvider = StateNotifierProvider<PlateNotifier, PlateState>((ref) {
   return PlateNotifier(ref.watch(dioClientProvider));
 });
 
-final postListProvider = StateNotifierProvider.autoDispose<PostListNotifier, PostListState>((ref) {
+final postListProvider = StateNotifierProvider<PostListNotifier, PostListState>((ref) {
   return PostListNotifier(ref.watch(dioClientProvider));
 });

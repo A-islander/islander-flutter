@@ -53,10 +53,17 @@ class SageListNotifier extends StateNotifier<SageListState> {
     try {
       final res = await _dio.getSageList(page: page);
       final data = res.data;
-      if (data is Map && data['code'] == 200 && data['data'] is List) {
-        final list = (data['data'] as List)
-            .map((e) => Post.fromJson(e as Map<String, dynamic>))
-            .toList();
+      if (data is Map && data['code'] == 200) {
+        final rawData = data['data'];
+        final List<dynamic> rawList;
+        if (rawData is Map) {
+          rawList = (rawData['list'] as List?) ?? [];
+        } else if (rawData is List) {
+          rawList = rawData;
+        } else {
+          rawList = [];
+        }
+        final list = rawList.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
         state = state.copyWith(
           posts: refresh ? list : [...state.posts, ...list],
           isLoading: false,
@@ -77,7 +84,7 @@ class SageListNotifier extends StateNotifier<SageListState> {
   }
 }
 
-final sageListProvider = StateNotifierProvider.autoDispose<SageListNotifier, SageListState>((ref) {
+final sageListProvider = StateNotifierProvider<SageListNotifier, SageListState>((ref) {
   return SageListNotifier(ref.watch(dioClientProvider));
 });
 

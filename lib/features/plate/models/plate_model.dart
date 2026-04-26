@@ -8,10 +8,10 @@ class Plate {
 
   factory Plate.fromJson(Map<String, dynamic> json) {
     return Plate(
-      id: json['Id'] as int? ?? 0,
-      name: json['Name'] as String? ?? '',
-      status: json['Status'] as int? ?? 0,
-      value: json['Value'] as String? ?? '',
+      id: json['id'] as int? ?? 0,
+      name: json['name'] as String? ?? '',
+      status: json['status'] as int? ?? 0,
+      value: json['value'] as String? ?? '',
     );
   }
 }

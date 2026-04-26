@@ -8,7 +8,7 @@ class AppTheme {
       brightness: Brightness.light,
       colorSchemeSeed: AppColors.themePrimary,
       scaffoldBackgroundColor: AppColors.lightBgPrimary,
-      cardColor: AppColors.lightBgSecondary,
+      cardColor: AppColors.lightBgTertiary,
       dividerColor: AppColors.lightBorderPrimary,
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.themePrimary,
@@ -19,11 +19,11 @@ class AppTheme {
         ),
       ),
       cardTheme: CardThemeData(
-        color: AppColors.lightBgSecondary,
+        color: AppColors.lightBgTertiary,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: AppColors.lightBorderPrimary),
+          side: BorderSide(color: AppColors.themePrimary.withValues(alpha: 0.8)),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -55,7 +55,7 @@ class AppTheme {
       brightness: Brightness.dark,
       colorSchemeSeed: AppColors.darkThemePrimary,
       scaffoldBackgroundColor: AppColors.darkBgPrimary,
-      cardColor: AppColors.darkBgSecondary,
+      cardColor: AppColors.darkBgTertiary,
       dividerColor: AppColors.darkBorderPrimary,
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.darkThemePrimary,
@@ -66,11 +66,11 @@ class AppTheme {
         ),
       ),
       cardTheme: CardThemeData(
-        color: AppColors.darkBgSecondary,
+        color: AppColors.darkBgTertiary,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: AppColors.darkBorderPrimary),
+          side: BorderSide(color: AppColors.darkThemePrimary.withValues(alpha: 0.8)),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
