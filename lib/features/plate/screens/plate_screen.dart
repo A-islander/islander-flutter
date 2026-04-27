@@ -184,9 +184,12 @@ class _PlateScreenState extends ConsumerState<PlateScreen> {
                                 child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
                               );
                             }
-                            return PostCard(
-                              post: postState.posts[index],
-                              currentUserId: auth.isLoggedIn ? auth.userId : null,
+                            return InkWell(
+                              onTap: () => context.go('/post/${postState.posts[index].id}'),
+                              child: PostCard(
+                                post: postState.posts[index],
+                                currentUserId: auth.isLoggedIn ? auth.userId : null,
+                              ),
                             );
                           },
                         ),
