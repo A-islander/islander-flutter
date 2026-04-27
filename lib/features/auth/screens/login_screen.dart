@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../main.dart';
 import '../../plate/models/post_model.dart';
+import '../../../shared/widgets/post_card.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -17,6 +18,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _isLoading = false;
   List<Post> _userPosts = [];
   bool _isLoadingPosts = false;
+  int _currentPage = 1;
+  bool _hasMore = true;
+  final _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -24,6 +28,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final auth = ref.read(authProvider);
     if (auth.isLoggedIn) {
       _tokenController.text = auth.token;
+      Future.microtask(() => _fetchUserPosts());
+    }
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _tokenController.dispose();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      _loadNext();
     }
   }
 
@@ -52,7 +72,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoading = true);
     await ref.read(authProvider.notifier).setToken(token);
     await _fetchUserInfo();
-    if (mounted) setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() => _isLoading = false);
+      _fetchUserPosts();
+    }
   }
 
   Future<void> _fetchUserInfo() async {
@@ -73,11 +96,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } catch (_) {}
   }
 
-  Future<void> _fetchUserPosts() async {
-    setState(() => _isLoadingPosts = true);
+  Future<void> _fetchUserPosts({bool refresh = false}) async {
+    if (!ref.read(authProvider).isLoggedIn) return;
+
+    setState(() {
+      if (refresh) {
+        _userPosts = [];
+        _currentPage = 1;
+        _hasMore = true;
+      }
+      _isLoadingPosts = true;
+    });
+
     try {
       final dio = ref.read(dioClientProvider);
-      final res = await dio.getUserList(page: 0);
+      final res = await dio.getUserList(page: _currentPage - 1);
       final data = res.data;
       if (data is Map && data['code'] == 200) {
         final rawData = data['data'];
@@ -89,12 +122,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         } else {
           rawList = [];
         }
+        final newPosts = rawList.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
         setState(() {
-          _userPosts = rawList.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
+          _userPosts = refresh ? newPosts : [..._userPosts, ...newPosts];
+          _hasMore = newPosts.length >= 20;
         });
       }
     } catch (_) {}
     if (mounted) setState(() => _isLoadingPosts = false);
+  }
+
+  Future<void> _loadNext() async {
+    if (!_hasMore || _isLoadingPosts) return;
+    _currentPage++;
+    await _fetchUserPosts();
   }
 
   Future<void> _logout() async {
@@ -102,13 +143,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() {
       _tokenController.clear();
       _userPosts = [];
+      _currentPage = 1;
+      _hasMore = true;
     });
   }
 
-  @override
-  void dispose() {
-    _tokenController.dispose();
-    super.dispose();
+  void _gotoPost(Post post) {
+    final targetId = post.followId != 0 ? post.followId : post.id;
+    context.go('/post/$targetId');
   }
 
   @override
@@ -123,137 +165,140 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // User info card
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('当前状态', style: theme.textTheme.titleMedium),
-                    const SizedBox(height: 12),
-                    if (auth.isLoggedIn) ...[
-                      Text('用户名: ${auth.name}'),
-                      Text('ID: ${auth.userId}'),
-                      Text('Token: ${auth.token.substring(0, 8)}...'),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          ElevatedButton(
-                            onPressed: _fetchUserPosts,
-                            child: const Text('查看发帖历史'),
+      body: Column(
+        children: [
+          // Top info section (fixed)
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // User info card
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('饼干信息', style: theme.textTheme.titleMedium),
+                        const SizedBox(height: 12),
+                        if (auth.isLoggedIn) ...[
+                          Text('饼干名: ${auth.name}'),
+                          Text('ID: ${auth.userId}'),
+                          Text('Token: ${auth.token.substring(0, 8)}...'),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              OutlinedButton(
+                                onPressed: _logout,
+                                style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                                child: const Text('登出'),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          OutlinedButton(
-                            onPressed: _logout,
-                            style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-                            child: const Text('登出'),
+                        ] else ...[
+                          const Text('未登录'),
+                          const SizedBox(height: 8),
+                          ElevatedButton(
+                            onPressed: _isLoading ? null : _register,
+                            child: _isLoading
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                : const Text('注册获取饼干'),
                           ),
                         ],
-                      ),
-                    ] else ...[
-                      const Text('未登录'),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: _isLoading ? null : _register,
-                        child: _isLoading
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Text('注册获取饼干'),
-                      ),
-                    ],
-                  ],
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+
+                const SizedBox(height: 12),
+
+                // Token input
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('饼干管理', style: theme.textTheme.titleMedium),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _tokenController,
+                          decoration: InputDecoration(
+                            hintText: '输入Token',
+                            border: const OutlineInputBorder(),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.copy, size: 18),
+                              onPressed: () {
+                                if (auth.isLoggedIn) {
+                                  Clipboard.setData(ClipboardData(text: auth.token));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('已复制Token')),
+                                  );
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _loginWithToken,
+                            child: const Text('使用Token登录'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
+          ),
 
-            const SizedBox(height: 16),
+          const Divider(),
 
-            // Token input
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('饼干管理', style: theme.textTheme.titleMedium),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _tokenController,
-                      decoration: InputDecoration(
-                        hintText: '输入Token',
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.copy, size: 18),
-                          onPressed: () {
-                            if (auth.isLoggedIn) {
-                              Clipboard.setData(ClipboardData(text: auth.token));
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('已复制Token')),
+          // Post list header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('发帖历史', style: theme.textTheme.titleSmall),
+            ),
+          ),
+
+          // Post list (scrollable)
+          Expanded(
+            child: auth.isLoggedIn
+                ? _userPosts.isEmpty && !_isLoadingPosts
+                    ? const Center(child: Text('暂无发帖记录'))
+                    : RefreshIndicator(
+                        onRefresh: () => _fetchUserPosts(refresh: true),
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          itemCount: _userPosts.length + (_isLoadingPosts ? 1 : 0),
+                          itemBuilder: (_, index) {
+                            if (index >= _userPosts.length) {
+                              return const Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
                               );
                             }
+                            final post = _userPosts[index];
+                            return InkWell(
+                              onTap: () => _gotoPost(post),
+                              child: PostCard(
+                                post: post,
+                                currentUserId: auth.isLoggedIn ? auth.userId : null,
+                              ),
+                            );
                           },
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _loginWithToken,
-                        child: const Text('使用Token登录'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // User posts
-            if (_userPosts.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Text('发帖历史', style: theme.textTheme.titleMedium),
-              const SizedBox(height: 8),
-              ..._userPosts.map((post) => Card(
-                    child: InkWell(
-                      onTap: () => context.go('/post/${post.id}'),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              post.value,
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'No.${post.id}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.secondary,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  )),
-            ],
-
-            if (_isLoadingPosts)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-              ),
-          ],
-        ),
+                      )
+                : const Center(child: Text('请先登录查看发帖历史')),
+          ),
+        ],
       ),
     );
   }
