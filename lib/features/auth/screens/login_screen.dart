@@ -77,7 +77,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoadingPosts = true);
     try {
       final dio = ref.read(dioClientProvider);
-      final res = await dio.getUserList(page: 1);
+      final res = await dio.getUserList(page: 0);
       final data = res.data;
       if (data is Map && data['code'] == 200) {
         final rawData = data['data'];

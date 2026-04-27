@@ -89,8 +89,8 @@ class PostListNotifier extends StateNotifier<PostListState> {
 
     try {
       final res = plateId == 0
-          ? await _dio.getIndexLast(page: page)
-          : await _dio.getForumIndex(plateId: plateId, page: page);
+          ? await _dio.getIndexLast(page: page - 1)
+          : await _dio.getForumIndex(plateId: plateId, page: page - 1);
 
       final data = res.data;
       if (data is Map && data['code'] == 200) {

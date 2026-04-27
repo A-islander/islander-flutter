@@ -91,7 +91,7 @@ class ReplyListNotifier extends StateNotifier<ReplyListState> {
     }
 
     try {
-      final res = await _dio.getForumList(postId: postId, page: page);
+      final res = await _dio.getForumList(postId: postId, page: page - 1);
       final data = res.data;
       if (data is Map && data['code'] == 200) {
         final rawData = data['data'];

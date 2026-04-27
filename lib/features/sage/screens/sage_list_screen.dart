@@ -51,7 +51,7 @@ class SageListNotifier extends StateNotifier<SageListState> {
     }
 
     try {
-      final res = await _dio.getSageList(page: page);
+      final res = await _dio.getSageList(page: page - 1);
       final data = res.data;
       if (data is Map && data['code'] == 200) {
         final rawData = data['data'];
