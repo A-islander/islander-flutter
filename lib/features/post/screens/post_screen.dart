@@ -66,6 +66,17 @@ class _PostScreenState extends ConsumerState<PostScreen> {
     } catch (_) {}
   }
 
+  void _insertQuote(int postId) {
+    final text = 'No.$postId';
+    final currentText = _replyController.text;
+    final selection = _replyController.selection;
+    final selectedText = selection.textInside(currentText);
+    final newText = currentText.replaceRange(selection.start, selection.end, text);
+    _replyController.text = newText;
+    final newCursorPos = selection.start + text.length;
+    _replyController.selection = TextSelection.collapsed(offset: newCursorPos);
+  }
+
   Future<void> _pickImages() async {
     final images = await _picker.pickMultiImage();
     for (final img in images) {
@@ -109,6 +120,7 @@ class _PostScreenState extends ConsumerState<PostScreen> {
                           PostCard(
                             post: detail.post!,
                             currentUserId: auth.isLoggedIn ? auth.userId : null,
+                            onInsertQuote: () => _insertQuote(detail.post!.id),
                           ),
                           const Divider(),
                           Padding(
@@ -127,6 +139,7 @@ class _PostScreenState extends ConsumerState<PostScreen> {
                             ...replies.replies.map((reply) => PostCard(
                                   post: reply,
                                   currentUserId: auth.isLoggedIn ? auth.userId : null,
+                                  onInsertQuote: () => _insertQuote(reply.id),
                                 )),
                           if (replies.isLoading)
                             const Padding(

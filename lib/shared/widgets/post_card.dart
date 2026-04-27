@@ -16,6 +16,7 @@ class PostCard extends ConsumerStatefulWidget {
   final int? currentUserId;
   final int depth;
   final Function(int postId)? onQuoteTap;
+  final VoidCallback? onInsertQuote;
 
   const PostCard({
     super.key,
@@ -23,6 +24,7 @@ class PostCard extends ConsumerStatefulWidget {
     this.currentUserId,
     this.depth = 0,
     this.onQuoteTap,
+    this.onInsertQuote,
   });
 
   @override
@@ -160,7 +162,7 @@ class _PostCardState extends ConsumerState<PostCard> {
           // Header
           PostCardHeader(
             post: widget.post,
-            onTapPostNumber: () => context.go('/post/${widget.post.id}'),
+            onTapPostNumber: widget.onInsertQuote ?? () => context.go('/post/${widget.post.id}'),
           ),
           const Divider(height: 1),
 
