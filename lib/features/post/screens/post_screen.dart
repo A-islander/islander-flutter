@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../main.dart';
 import '../../../shared/widgets/post_card.dart';
@@ -49,19 +50,45 @@ class _PostScreenState extends ConsumerState<PostScreen> {
 
   Future<void> _submitReply() async {
     final value = _replyController.text.trim();
-    if (value.isEmpty) return;
+    if (value.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('总得说点什么吧')),
+      );
+      return;
+    }
+
+    final auth = ref.read(authProvider);
+    if (!auth.isLoggedIn) {
+      context.go('/login');
+      return;
+    }
 
     final dio = ref.read(dioClientProvider);
     final mediaUrl = _mediaItems.isEmpty
-        ? ''
+        ? '[]'
         : '[${_mediaItems.map((m) => '{"id":"${m.id}","url":"${m.url}","thumbnailUrl":"${m.thumbnailUrl}","type":"${m.type}"}').join(',')}]';
 
     try {
       final res = await dio.replyPost(value: value, followId: widget.postId, mediaUrl: mediaUrl);
-      if (res.data['code'] == 200 && res.data['data'] != null) {
-        ref.read(replyListProvider.notifier).addReply(Post.fromJson(res.data['data']));
+      if (res.data['code'] == 200) {
         _replyController.clear();
         setState(() => _mediaItems = []);
+        // Reload replies to get updated list
+        ref.read(replyListProvider.notifier).fetchReplies(postId: widget.postId, page: 1, refresh: true);
+        // Also refresh post detail to update replyCount
+        ref.read(postDetailProvider.notifier).fetchPost(widget.postId);
+      } else if (res.data['code'] == 403) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('请领取饼干')),
+          );
+        }
+      } else if (res.data['code'] == 404) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('总得说点什么吧')),
+          );
+        }
       }
     } catch (_) {}
   }

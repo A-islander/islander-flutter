@@ -58,7 +58,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         if (token.isNotEmpty) {
           await ref.read(authProvider.notifier).setToken(token);
           setState(() => _tokenController.text = token);
-          _fetchUserInfo();
+          await _fetchUserInfo();
         }
       }
     } catch (_) {}
@@ -165,7 +165,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
         ),
       ),
-      body: Column(
+      body: Stack(
+        children: [
+          Column(
         children: [
           // Top info section (fixed)
           SingleChildScrollView(
@@ -298,6 +300,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       )
                 : const Center(child: Text('请先登录查看发帖历史')),
           ),
+        ],
+      ),
         ],
       ),
     );

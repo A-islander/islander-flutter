@@ -25,14 +25,14 @@ class AppRouter {
         path: '/plate/:plateId',
         builder: (context, state) {
           final plateId = int.tryParse(state.pathParameters['plateId'] ?? '0') ?? 0;
-          return PlateScreen(plateId: plateId);
+          return PlateScreen(key: ValueKey(plateId), plateId: plateId);
         },
       ),
       GoRoute(
         path: '/post/:postId',
         builder: (context, state) {
           final postId = int.tryParse(state.pathParameters['postId'] ?? '0') ?? 0;
-          return PostScreen(postId: postId);
+          return PostScreen(key: ValueKey(postId), postId: postId);
         },
       ),
       GoRoute(

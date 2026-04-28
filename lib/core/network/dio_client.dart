@@ -63,9 +63,9 @@ class DioClient {
   Future<Response> getUserList({required int page, int size = ApiConstants.pageSize}) =>
       _forumDio.get(ApiConstants.forumUserList, queryParameters: {'page': page, 'size': size});
   Future<Response> createPost({required String title, required String value, required int plateId, String mediaUrl = ''}) =>
-      _forumDio.post(ApiConstants.forumPost, data: {'title': title, 'value': value, 'plateId': plateId, 'mediaUrl': mediaUrl});
+      _forumDio.post(ApiConstants.forumPost, data: {'title': title, 'value': value, 'plateId': plateId, 'replyArr': [], 'mediaUrl': mediaUrl});
   Future<Response> replyPost({required String value, required int followId, String mediaUrl = ''}) =>
-      _forumDio.post(ApiConstants.forumReply, data: {'value': value, 'followId': followId, 'mediaUrl': mediaUrl});
+      _forumDio.post(ApiConstants.forumReply, data: {'value': value, 'followId': followId, 'replyArr': [], 'mediaUrl': mediaUrl});
   Future<Response> sageAdd(int postId) => _forumDio.get('${ApiConstants.forumSageAdd}?postId=$postId');
   Future<Response> sageSub(int postId) => _forumDio.get('${ApiConstants.forumSageSub}?postId=$postId');
   Future<Response> getSageList({required int page, int size = ApiConstants.pageSize}) =>

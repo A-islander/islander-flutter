@@ -150,11 +150,7 @@ class _PostCardState extends ConsumerState<PostCard> {
       ),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
-        border: Border.all(
-          color: theme.colorScheme.primary.withValues(alpha: isQuoted ? 0.5 : 0.8),
-          width: isQuoted ? 1.5 : 1,
-        ),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
