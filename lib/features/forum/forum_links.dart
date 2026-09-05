@@ -38,7 +38,7 @@ class ForumExternalLinks extends StatelessWidget {
     if (context.mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('无法打开链接，请检查浏览器设置后重试')));
+      ).showSnackBar(SnackBar(content: Text('无法打开链接，请检查浏览器设置后重试')));
     }
   }
 
@@ -50,15 +50,15 @@ class ForumExternalLinks extends StatelessWidget {
         (title: '站务', links: forumSiteLinks),
         (title: '友链', links: forumFriendLinks),
       ]) ...[
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 20),
-          child: Divider(),
-        ),
+        Padding(padding: EdgeInsets.symmetric(vertical: 20), child: Divider()),
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+          padding: EdgeInsets.fromLTRB(12, 0, 12, 10),
           child: Text(
             group.title,
-            style: const TextStyle(fontSize: 10, color: ForumColors.muted),
+            style: TextStyle(
+              fontSize: 10,
+              color: ForumPalette.of(context).muted,
+            ),
           ),
         ),
         for (final link in group.links)
@@ -69,26 +69,23 @@ class ForumExternalLinks extends StatelessWidget {
               child: InkWell(
                 onTap: () => _open(context, link.url),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 13,
-                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 13),
                   child: Row(
                     children: [
                       Expanded(
                         child: Text(
                           link.label,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
-                            color: ForumColors.muted,
+                            color: ForumPalette.of(context).muted,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      const Icon(
+                      SizedBox(width: 8),
+                      Icon(
                         Icons.north_east,
                         size: 13,
-                        color: ForumColors.muted,
+                        color: ForumPalette.of(context).muted,
                       ),
                     ],
                   ),

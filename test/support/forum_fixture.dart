@@ -17,6 +17,12 @@ class ForumFixture implements HttpClientAdapter {
   bool failRead = false;
   bool failAuth = false;
   bool deleted = false;
+  int listCount = 21;
+  int replyCount = 2;
+  Future<void>? nextPageGate;
+  bool duplicatePrevious = false;
+  bool emptyNextPage = false;
+  List<Map<String, dynamic>> lastReplies = [];
   Map<String, dynamic>? overrideResponse;
   Map<String, dynamic> post(int id, {int follow = 0, int status = 0}) => {
     'id': id,
@@ -31,7 +37,7 @@ class ForumFixture implements HttpClientAdapter {
     'status': deleted ? 2 : status,
     'mediaUrl': '[]',
     'replyArr': [],
-    'lastReplyArr': [],
+    'lastReplyArr': follow == 0 ? lastReplies : [],
   };
   @override
   Future<ResponseBody> fetch(
@@ -82,14 +88,25 @@ class ForumFixture implements HttpClientAdapter {
         code = 500;
         msg = '加载失败，请重试';
       }
+      final page = options.queryParameters['page'] as int? ?? 0;
+      if (page == 1 && nextPageGate != null) await nextPageGate;
+      final parent = options.queryParameters['postId'] as int? ?? 10;
       data = path == '/forum/list'
           ? {
-              'count': 2,
-              'list': [post(10), post(11, follow: 10)],
+              'count': replyCount,
+              'list': [
+                if (page == 0) post(parent),
+                post(parent + page * 20 + 1, follow: parent),
+              ],
             }
           : {
-              'count': 21,
-              'list': [post(options.queryParameters['page'] == 1 ? 20 : 10)],
+              'count': listCount,
+              'list': [
+                if (!(emptyNextPage && page > 0)) ...[
+                  if (duplicatePrevious && page > 0) post(page * 10),
+                  post((page + 1) * 10),
+                ],
+              ],
             };
     }
     return ResponseBody.fromString(

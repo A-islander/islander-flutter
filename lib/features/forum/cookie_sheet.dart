@@ -64,7 +64,7 @@ class _CookieSheetState extends ConsumerState<CookieSheet> {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
                   '我的饼干',
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
@@ -73,27 +73,30 @@ class _CookieSheetState extends ConsumerState<CookieSheet> {
               IconButton(
                 onPressed: _busy ? null : () => Navigator.pop(context),
                 tooltip: '关闭',
-                icon: const Icon(Icons.close),
+                icon: Icon(Icons.close),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          const Text(
+          SizedBox(height: 12),
+          Text(
             '饼干是你在岛上的身份。妥善保存，不要分享给其他人。',
-            style: TextStyle(color: ForumColors.muted, height: 1.6),
+            style: TextStyle(
+              color: ForumPalette.of(context).muted,
+              height: 1.6,
+            ),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: 24),
           if (auth.isLoggedIn) ...[
             Text(
               auth.name.isEmpty ? '岛民 #${auth.userId}' : auth.name,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               'ID ${auth.userId}',
-              style: const TextStyle(color: ForumColors.muted),
+              style: TextStyle(color: ForumPalette.of(context).muted),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             Wrap(
               spacing: 12,
               children: [
@@ -105,12 +108,12 @@ class _CookieSheetState extends ConsumerState<CookieSheet> {
                             ClipboardData(text: auth.token),
                           );
                           if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('饼干已复制')),
-                            );
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(SnackBar(content: Text('饼干已复制')));
                           }
                         },
-                  child: const Text('复制饼干'),
+                  child: Text('复制饼干'),
                 ),
                 TextButton(
                   onPressed: _busy
@@ -119,14 +122,14 @@ class _CookieSheetState extends ConsumerState<CookieSheet> {
                           await ref.read(authProvider.notifier).logout();
                           if (context.mounted) Navigator.pop(context, true);
                         },
-                  child: const Text('退出当前饼干'),
+                  child: Text('退出当前饼干'),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
           ],
           TextField(
-            key: const Key('cookie-token'),
+            key: Key('cookie-token'),
             controller: _token,
             obscureText: true,
             enabled: !_busy,
@@ -138,26 +141,26 @@ class _CookieSheetState extends ConsumerState<CookieSheet> {
           ),
           if (_error != null)
             Padding(
-              padding: const EdgeInsets.only(top: 12),
+              padding: EdgeInsets.only(top: 12),
               child: Text(
                 _error!,
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
           Wrap(
             spacing: 12,
             runSpacing: 8,
             children: [
               FilledButton(
-                key: const Key('cookie-login'),
+                key: Key('cookie-login'),
                 onPressed: _busy ? null : _login,
                 child: Text(_busy ? '验证中…' : '导入饼干'),
               ),
               if (!auth.isLoggedIn)
                 OutlinedButton(
                   onPressed: _busy ? null : () => _login(register: true),
-                  child: const Text('领取饼干'),
+                  child: Text('领取饼干'),
                 ),
             ],
           ),

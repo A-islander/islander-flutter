@@ -33,6 +33,13 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Android/Gradle build outputs (including APKs and native intermediates)
+/android/build/
+/android/app/build/
+/android/.gradle/
+/android/.kotlin/
+**/.cxx/
+
 # Symbolication related
 app.*.symbols
 

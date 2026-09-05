@@ -4,6 +4,27 @@ import 'package:islander_flutter/core/router/app_router.dart';
 import 'support/forum_fixture.dart';
 
 void main() {
+  testWidgets('five reply previews omit own IDs and preserve body references', (
+    tester,
+  ) async {
+    final fixture = ForumFixture()
+      ..lastReplies = List.generate(
+        6,
+        (index) => {
+          'id': 101 + index,
+          'name': '回复者 $index',
+          'value': '预览 $index No.42',
+        },
+      );
+    await pumpForum(tester, fixture);
+    for (var index = 0; index < 5; index++) {
+      expect(find.text('回复者 $index: 预览 $index No.42'), findsOneWidget);
+      expect(find.textContaining('No.${101 + index}'), findsNothing);
+    }
+    expect(find.textContaining('预览 5'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('deleted content is hidden from anonymous readers', (
     tester,
   ) async {
@@ -17,8 +38,10 @@ void main() {
     await pumpForum(tester, fixture);
     expect(find.text('测试主串 10'), findsOneWidget);
     expect(find.text('海浪之家酒吧'), findsNothing);
-    await tester.ensureVisible(find.text('下一页 →'));
-    await tester.tap(find.text('下一页 →'));
+    await tester.tap(find.byKey(const Key('page-jump-trigger')));
+    await pumpFrames(tester);
+    await tester.enterText(find.byKey(const Key('page-jump-input')), '2');
+    await tester.tap(find.byKey(const Key('page-jump-submit')));
     await pumpFrames(tester);
     expect(find.text('测试主串 20'), findsOneWidget);
     expect(fixture.requests.last.queryParameters['page'], 1);

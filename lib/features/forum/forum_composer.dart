@@ -54,16 +54,16 @@ class _ForumComposerState extends ConsumerState<ForumComposer> {
       final discard = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('放弃这次编辑？'),
-          content: const Text('尚未发布的内容将丢失。'),
+          title: Text('放弃这次编辑？'),
+          content: Text('尚未发布的内容将丢失。'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('继续编辑'),
+              child: Text('继续编辑'),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('放弃'),
+              child: Text('放弃'),
             ),
           ],
         ),
@@ -182,15 +182,15 @@ class _ForumComposerState extends ConsumerState<ForumComposer> {
                   children: [
                     Text(
                       _reply ? 'REPLY · NO.${widget.threadId}' : 'NEW THREAD',
-                      style: const TextStyle(
-                        color: ForumColors.accent,
+                      style: TextStyle(
+                        color: ForumPalette.of(context).accent,
                         fontSize: 11,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    SizedBox(height: 6),
                     Text(
                       _reply ? '写下回复' : '发布新串',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 23,
                         fontWeight: FontWeight.w800,
                       ),
@@ -201,15 +201,15 @@ class _ForumComposerState extends ConsumerState<ForumComposer> {
               IconButton(
                 onPressed: _busy ? null : _close,
                 tooltip: '关闭编辑',
-                icon: const Icon(Icons.close),
+                icon: Icon(Icons.close),
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: 24),
           if (!_reply) ...[
             DropdownButtonFormField<int>(
               initialValue: widget.boards.isEmpty ? null : _boardId,
-              decoration: const InputDecoration(labelText: '发布到'),
+              decoration: InputDecoration(labelText: '发布到'),
               items: widget.boards
                   .map(
                     (p) => DropdownMenuItem(value: p.id, child: Text(p.name)),
@@ -219,27 +219,24 @@ class _ForumComposerState extends ConsumerState<ForumComposer> {
                   ? null
                   : (id) => setState(() => _boardId = id ?? _boardId),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             TextField(
-              key: const Key('composer-title'),
+              key: Key('composer-title'),
               controller: _title,
               enabled: !_busy,
               maxLength: 40,
-              decoration: const InputDecoration(
-                labelText: '标题（可选）',
-                counterText: '',
-              ),
+              decoration: InputDecoration(labelText: '标题（可选）', counterText: ''),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
           ],
           TextField(
-            key: const Key('composer-body'),
+            key: Key('composer-body'),
             controller: _body,
             enabled: !_busy,
             minLines: 4,
             maxLines: 8,
             maxLength: 10000,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: '正文',
               hintText: '写下想说的话，输入 No.编号 引用内容',
             ),
@@ -252,25 +249,28 @@ class _ForumComposerState extends ConsumerState<ForumComposer> {
                 onPressed: _busy
                     ? null
                     : () => setState(() => _emojis = !_emojis),
-                child: const Text('颜文字'),
+                child: Text('颜文字'),
               ),
               IconButton(
                 onPressed: _busy || _media.length >= 5
                     ? null
                     : () => _pick(false),
                 tooltip: '添加图片',
-                icon: const Icon(Icons.image_outlined),
+                icon: Icon(Icons.image_outlined),
               ),
               IconButton(
                 onPressed: _busy || _media.length >= 5
                     ? null
                     : () => _pick(true),
                 tooltip: '添加视频',
-                icon: const Icon(Icons.videocam_outlined),
+                icon: Icon(Icons.videocam_outlined),
               ),
               Text(
                 '${_media.length}/5 · 单个 20 MB',
-                style: const TextStyle(fontSize: 11, color: ForumColors.muted),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: ForumPalette.of(context).muted,
+                ),
               ),
             ],
           ),
@@ -316,17 +316,17 @@ class _ForumComposerState extends ConsumerState<ForumComposer> {
             ),
           if (_error != null)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: EdgeInsets.symmetric(vertical: 12),
               child: Text(
                 _error!,
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton(
-              key: const Key('composer-submit'),
+              key: Key('composer-submit'),
               onPressed: _busy ? null : _submit,
               child: Text(
                 _sending

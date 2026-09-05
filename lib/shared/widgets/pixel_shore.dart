@@ -35,7 +35,7 @@ class _PixelShoreState extends State<PixelShore>
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     if (reduceMotion && _controller.isAnimating) _controller.stop();
     if (!reduceMotion && !_controller.isAnimating) _controller.repeat();
-    return IgnorePointer(
+    final shore = IgnorePointer(
       child: RepaintBoundary(
         child: SizedBox(
           height: widget.height,
@@ -51,6 +51,15 @@ class _PixelShoreState extends State<PixelShore>
         ),
       ),
     );
+    return Theme.of(context).brightness == Brightness.dark
+        ? ColorFiltered(
+            colorFilter: const ColorFilter.mode(
+              Color(0xFF819A94),
+              BlendMode.modulate,
+            ),
+            child: shore,
+          )
+        : shore;
   }
 }
 

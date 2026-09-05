@@ -82,12 +82,66 @@ const browser = spawn(process.env.CHROME_EXECUTABLE || '/opt/google/chrome/chrom
       fs.writeFileSync(path.join(output, name), Buffer.from(result.data, 'base64'));
     }
     await screenshot('forum-live-desktop.png');
+    async function click(x, y) {
+      await send('Input.dispatchMouseEvent', {type: 'mousePressed', x, y, button: 'left', clickCount: 1});
+      await send('Input.dispatchMouseEvent', {type: 'mouseReleased', x, y, button: 'left', clickCount: 1});
+      await pause(700);
+    }
+    if (process.argv.includes('--paging')) {
+      await click(1260, 32); await screenshot('forum-page-jump-desktop.png');
+      await click(700, 150);
+    }
     if (process.argv.includes('--links')) {
       await send('Input.dispatchMouseEvent', {type: 'mouseWheel', x: 250, y: 620, deltaX: 0, deltaY: 680});
       await pause(700); await screenshot('forum-links-desktop.png');
     }
     await send('Emulation.setDeviceMetricsOverride', {width: 390, height: 844, deviceScaleFactor: 1, mobile: true});
     await pause(2000); await screenshot('forum-live-mobile.png');
+    if (process.argv.includes('--paging')) {
+      await click(350, 32); await screenshot('forum-page-jump-mobile.png');
+      await click(200, 150);
+    }
+    if (process.argv.includes('--theme')) {
+      await send('Emulation.setEmulatedMedia', {features: [{name: 'prefers-color-scheme', value: 'dark'}]});
+      await pause(1200); await screenshot('forum-dark-mobile.png');
+      await click(350, 32); await screenshot('forum-dark-page-jump.png');
+      await click(200, 150);
+      await send('Emulation.setEmulatedMedia', {features: [{name: 'prefers-color-scheme', value: 'light'}]});
+      await pause(1200);
+    }
+    if (process.argv.includes('--previous')) {
+      const pageReads = page => [...responses.values()].filter(raw => {
+        const url = new URL(raw);
+        return url.pathname === '/forum/indexLast' && url.searchParams.get('page') === String(page);
+      }).length;
+      await click(350, 32);
+      await click(285, 756); // Next page in the page-jump sheet.
+      await pause(1800);
+      if (!pageReads(1)) throw new Error('Could not jump to the second page');
+      const previousReads = pageReads(0);
+      await send('Emulation.setTouchEmulationEnabled', {enabled: true});
+      await send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [{x: 180, y: 260}]});
+      for (const y of [300, 350, 400, 460, 530, 590]) {
+        await send('Input.dispatchTouchEvent', {type: 'touchMove', touchPoints: [{x: 180, y}]});
+        await pause(70);
+      }
+      await send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []});
+      await pause(2000);
+      if (pageReads(0) <= previousReads) throw new Error('Pulling from the middle did not load the previous page');
+      await screenshot('forum-previous-mobile.png');
+    }
+    if (process.argv.includes('--scroll')) {
+      const appended = () => [...responses.values()].some(raw => {
+        const url = new URL(raw);
+        return url.pathname === '/forum/indexLast' && url.searchParams.get('page') === '1';
+      });
+      for (let i = 0; i < 45 && !appended(); i++) {
+        await send('Input.dispatchMouseEvent', {type: 'mouseWheel', x: 200, y: 500, deltaX: 0, deltaY: 1000});
+        await pause(400);
+      }
+      if (!appended()) throw new Error('Scrolling did not request the next production page');
+      await pause(800); await screenshot('forum-infinite-mobile.png');
+    }
     if (process.argv.includes('--links')) {
       await send('Input.dispatchMouseEvent', {type: 'mousePressed', x: 28, y: 32, button: 'left', clickCount: 1});
       await send('Input.dispatchMouseEvent', {type: 'mouseReleased', x: 28, y: 32, button: 'left', clickCount: 1});

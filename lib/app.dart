@@ -12,6 +12,9 @@ class IslanderApp extends ConsumerWidget {
       title: '岛民岛',
       debugShowCheckedModeBanner: false,
       theme: forumTheme(),
+      darkTheme: forumTheme(brightness: Brightness.dark),
+      themeMode: ThemeMode.system,
+      themeAnimationDuration: Duration.zero,
       routerConfig: AppRouter.router,
     );
   }
