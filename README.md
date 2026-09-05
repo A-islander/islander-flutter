@@ -2,6 +2,8 @@
 
 正式入口 `lib/main.dart` 使用已确认的论坛原型视觉，默认连接正式服。
 
+当前版本为 `0.0.1+2`，发布标签为 `v0.0.1`。Android 构建号递增至 `2`，以支持覆盖安装上一份 `1.0.0+1` 体验包；展示版本按首次发布统一为 `0.0.1`。版本说明见 [CHANGELOG.md](CHANGELOG.md)。
+
 ```bash
 flutter run -t lib/main.dart
 flutter test --concurrency=1
