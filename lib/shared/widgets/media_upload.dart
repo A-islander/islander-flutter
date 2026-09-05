@@ -134,7 +134,7 @@ class _MediaUploadWidgetState extends ConsumerState<MediaUploadWidget> {
                               File(e.value.url),
                               width: 80, height: 80,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
+                              errorBuilder: (_, _, _) => Container(
                                 width: 80, height: 80,
                                 color: theme.colorScheme.surfaceContainerHighest,
                                 child: const Icon(Icons.broken_image),

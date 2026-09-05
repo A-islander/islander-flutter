@@ -1,6 +1,12 @@
 class ApiConstants {
-  static const String forumBaseUrl = 'https://forum-api.islander.top/';
-  static const String userBaseUrl = 'https://user-api.islander.top/';
+  static const String forumBaseUrl = String.fromEnvironment(
+    'FORUM_API_URL',
+    defaultValue: 'https://forum-api.islander.top/',
+  );
+  static const String userBaseUrl = String.fromEnvironment(
+    'USER_API_URL',
+    defaultValue: 'https://user-api.islander.top/',
+  );
 
   // Forum API
   static const String plateGet = 'plate/get';

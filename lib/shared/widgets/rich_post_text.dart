@@ -3,12 +3,44 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class RichPostText extends StatelessWidget {
+class RichPostText extends StatefulWidget {
   final String text;
   final TextStyle? style;
   final int? maxLines;
+  final ValueChanged<int>? onQuote;
 
-  const RichPostText({super.key, required this.text, this.style, this.maxLines});
+  const RichPostText({
+    super.key,
+    required this.text,
+    this.style,
+    this.maxLines,
+    this.onQuote,
+  });
+
+  @override
+  State<RichPostText> createState() => _RichPostTextState();
+}
+
+class _RichPostTextState extends State<RichPostText> {
+  final _recognizers = <TapGestureRecognizer>[];
+  void _clearRecognizers() {
+    for (final r in _recognizers) {
+      r.dispose();
+    }
+    _recognizers.clear();
+  }
+
+  TapGestureRecognizer _tap(VoidCallback onTap) {
+    final recognizer = TapGestureRecognizer()..onTap = onTap;
+    _recognizers.add(recognizer);
+    return recognizer;
+  }
+
+  @override
+  void dispose() {
+    _clearRecognizers();
+    super.dispose();
+  }
 
   static final _urlOrNoRegex = RegExp(
     r'(http|ftp|https)://[\w\-_]+(\.[\w\-_]+)+([\w\-\.,@?^=%&:/~\+#]*[\w\-\@?^=%&/~\+#])?|No\.[0-9]+',
@@ -16,6 +48,10 @@ class RichPostText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _clearRecognizers();
+    final text = widget.text;
+    final style = widget.style;
+    final maxLines = widget.maxLines;
     if (text.isEmpty) return const SizedBox.shrink();
 
     final defaultStyle = style ?? DefaultTextStyle.of(context).style;
@@ -32,26 +68,39 @@ class RichPostText extends StatelessWidget {
       final matched = match.group(0)!;
 
       if (matched.startsWith('http')) {
-        spans.add(TextSpan(
-          text: '链接',
-          style: defaultStyle.copyWith(
-            color: Theme.of(context).colorScheme.secondary,
-            decoration: TextDecoration.underline,
+        spans.add(
+          TextSpan(
+            text: '链接',
+            style: defaultStyle.copyWith(
+              color: Theme.of(context).colorScheme.secondary,
+              decoration: TextDecoration.underline,
+            ),
+            recognizer: _tap(
+              () => launchUrl(
+                Uri.parse(matched),
+                mode: LaunchMode.externalApplication,
+              ),
+            ),
           ),
-          recognizer: TapGestureRecognizer()
-            ..onTap = () => launchUrl(Uri.parse(matched), mode: LaunchMode.externalApplication),
-        ));
+        );
       } else if (matched.startsWith('No.')) {
         final postId = matched.replaceFirst('No.', '');
-        spans.add(TextSpan(
-          text: '$matched ',
-          style: defaultStyle.copyWith(
-            color: Theme.of(context).colorScheme.secondary,
-            decoration: TextDecoration.underline,
+        spans.add(
+          TextSpan(
+            text: '$matched ',
+            style: defaultStyle.copyWith(
+              color: Theme.of(context).colorScheme.secondary,
+              decoration: TextDecoration.underline,
+            ),
+            recognizer: _tap(() {
+              if (widget.onQuote != null) {
+                widget.onQuote!(int.parse(postId));
+              } else {
+                context.push('/post/$postId');
+              }
+            }),
           ),
-          recognizer: TapGestureRecognizer()
-            ..onTap = () => context.go('/post/$postId'),
-        ));
+        );
       }
 
       cursor = match.end;

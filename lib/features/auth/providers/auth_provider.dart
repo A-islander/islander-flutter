@@ -8,8 +8,13 @@ class AuthState {
   final int userId;
   final bool isLoggedIn;
 
-  const AuthState({this.token = '', this.name = '', this.userId = 0}) : isLoggedIn = false;
-  const AuthState.loggedIn({required this.token, required this.name, required this.userId}) : isLoggedIn = true;
+  const AuthState({this.token = '', this.name = '', this.userId = 0})
+    : isLoggedIn = false;
+  const AuthState.loggedIn({
+    required this.token,
+    required this.name,
+    required this.userId,
+  }) : isLoggedIn = true;
 
   AuthState copyWith({String? token, String? name, int? userId}) {
     return AuthState.loggedIn(
@@ -25,6 +30,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   final DioClient _dio;
 
   AuthNotifier(this._storage, this._dio) : super(const AuthState()) {
+    _dio.onUnauthorized = logout;
     _loadFromStorage();
   }
 
@@ -38,10 +44,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> setToken(String token, {String name = '', int userId = 0}) async {
+  Future<void> setToken(
+    String token, {
+    String name = '',
+    int userId = 0,
+  }) async {
     await _storage.setToken(token);
-    if (name.isNotEmpty) await _storage.setName(name);
-    if (userId > 0) await _storage.setUserId(userId);
+    await _storage.setName(name);
+    await _storage.setUserId(userId);
     _dio.setToken(token);
     state = AuthState.loggedIn(token: token, name: name, userId: userId);
   }
@@ -57,8 +67,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
-    await _storage.removeToken();
     _dio.clearToken();
     state = const AuthState();
+    await _storage.removeToken();
+    await _storage.setName('');
+    await _storage.setUserId(0);
   }
 }

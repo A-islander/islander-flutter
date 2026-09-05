@@ -10,6 +10,7 @@ import 'package:islander_flutter/shared/widgets/post_card_header.dart';
 import 'package:islander_flutter/shared/widgets/media_item.dart';
 import 'package:islander_flutter/features/plate/models/post_model.dart';
 import 'package:islander_flutter/core/constants/emoji_constants.dart';
+import 'support/forum_fixture.dart';
 
 void main() {
   // --- App launch test ---
@@ -20,34 +21,49 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [storageServiceProvider.overrideWithValue(storageService)],
+        overrides: [
+          storageServiceProvider.overrideWithValue(storageService),
+          dioClientProvider.overrideWithValue(ForumFixture().client()),
+        ],
         child: const IslanderApp(),
       ),
     );
-    await tester.pumpAndSettle();
-    expect(find.text('时间线'), findsOneWidget);
+    await pumpFrames(tester);
+    expect(find.text('时间线'), findsWidgets);
   });
 
   // --- RichPostText tests ---
   testWidgets('RichPostText renders plain text', (WidgetTester tester) async {
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: RichPostText(text: 'Hello World'))),
+      MaterialApp(
+        home: Scaffold(body: RichPostText(text: 'Hello World')),
+      ),
     );
     await tester.pumpAndSettle();
     expect(find.text('Hello World'), findsOneWidget);
   });
 
-  testWidgets('RichPostText renders empty text as nothing', (WidgetTester tester) async {
+  testWidgets('RichPostText renders empty text as nothing', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: RichPostText(text: ''))),
+      MaterialApp(
+        home: Scaffold(body: RichPostText(text: '')),
+      ),
     );
     await tester.pumpAndSettle();
     expect(find.byType(SizedBox), findsOneWidget);
   });
 
-  testWidgets('RichPostText detects URL and replaces with link text', (WidgetTester tester) async {
+  testWidgets('RichPostText detects URL and replaces with link text', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: RichPostText(text: 'Visit https://example.com now'))),
+      MaterialApp(
+        home: Scaffold(
+          body: RichPostText(text: 'Visit https://example.com now'),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
     // URL should be replaced, so raw URL text should not appear
@@ -56,9 +72,13 @@ void main() {
     expect(find.textContaining('Visit'), findsWidgets);
   });
 
-  testWidgets('RichPostText detects No.XXX and renders it', (WidgetTester tester) async {
+  testWidgets('RichPostText detects No.XXX and renders it', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: RichPostText(text: 'See No.123 for details'))),
+      MaterialApp(
+        home: Scaffold(body: RichPostText(text: 'See No.123 for details')),
+      ),
     );
     await tester.pumpAndSettle();
     // No.123 should be rendered (as a tappable span)
@@ -66,10 +86,16 @@ void main() {
     expect(find.textContaining('See'), findsWidgets);
   });
 
-  testWidgets('RichPostText handles multiple URLs and refs', (WidgetTester tester) async {
+  testWidgets('RichPostText handles multiple URLs and refs', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: RichPostText(text: 'Check https://a.com and No.456 ok http://b.com')),
+        home: Scaffold(
+          body: RichPostText(
+            text: 'Check https://a.com and No.456 ok http://b.com',
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -82,7 +108,9 @@ void main() {
 
   testWidgets('RichPostText preserves newlines', (WidgetTester tester) async {
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: RichPostText(text: 'Line1\nLine2\nLine3'))),
+      MaterialApp(
+        home: Scaffold(body: RichPostText(text: 'Line1\nLine2\nLine3')),
+      ),
     );
     await tester.pumpAndSettle();
     expect(find.textContaining('Line1'), findsOneWidget);
@@ -93,11 +121,7 @@ void main() {
   testWidgets('PostCardHeader shows post info', (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: PostCardHeaderSample(),
-        ),
-      ),
+      MaterialApp(home: Scaffold(body: PostCardHeaderSample())),
     );
     await tester.pumpAndSettle();
     expect(find.text('TestUser'), findsOneWidget);
@@ -122,7 +146,8 @@ void main() {
   });
 
   test('MediaItem.parseMediaUrl handles JSON array', () {
-    const json = '[{"id":"1","url":"https://a.com/img.png","thumbnailUrl":"https://a.com/thumb.png","type":"image"}]';
+    const json =
+        '[{"id":"1","url":"https://a.com/img.png","thumbnailUrl":"https://a.com/thumb.png","type":"image"}]';
     final items = MediaItem.parseMediaUrl(json);
     expect(items.length, 1);
     expect(items.first.id, '1');

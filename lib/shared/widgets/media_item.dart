@@ -28,13 +28,29 @@ class MediaItem {
       final decoded = jsonDecode(mediaUrl);
       if (decoded is List) {
         return decoded
-            .whereType<Map<String, dynamic>>()
-            .map(MediaItem.fromJson)
+            .map((item) {
+              if (item is Map<String, dynamic>) return MediaItem.fromJson(item);
+              if (item is String && item.startsWith('http')) {
+                return MediaItem(
+                  id: '',
+                  url: item,
+                  thumbnailUrl: item,
+                  type: 'image',
+                );
+              }
+              return null;
+            })
+            .whereType<MediaItem>()
+            .where((item) => item.url.startsWith('http'))
             .toList();
       }
     } catch (_) {}
     // plain URL string fallback
-    if (mediaUrl.startsWith('http')) return [MediaItem(id: '', url: mediaUrl, thumbnailUrl: mediaUrl, type: 'image')];
+    if (mediaUrl.startsWith('http')) {
+      return [
+        MediaItem(id: '', url: mediaUrl, thumbnailUrl: mediaUrl, type: 'image'),
+      ];
+    }
     return [];
   }
 }

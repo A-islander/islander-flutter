@@ -6,7 +6,6 @@ import '../../../main.dart';
 import '../../../shared/widgets/post_card.dart';
 import '../../../shared/widgets/media_item.dart';
 import '../../../shared/widgets/emoji_picker.dart';
-import '../../plate/models/post_model.dart';
 import '../providers/post_provider.dart';
 
 class PostScreen extends ConsumerStatefulWidget {
@@ -97,7 +96,6 @@ class _PostScreenState extends ConsumerState<PostScreen> {
     final text = 'No.$postId';
     final currentText = _replyController.text;
     final selection = _replyController.selection;
-    final selectedText = selection.textInside(currentText);
     final newText = currentText.replaceRange(selection.start, selection.end, text);
     _replyController.text = newText;
     final newCursorPos = selection.start + text.length;

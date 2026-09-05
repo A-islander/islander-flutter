@@ -60,19 +60,19 @@ class Post {
   bool get isDeleted => status == 2;
 
   factory Post.fromJson(Map<String, dynamic> json) {
-    List<int> _parseIntList(dynamic val) {
+    List<int> parseIntList(dynamic val) {
       if (val == null) return [];
       if (val is List) return val.map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0).toList();
       return [];
     }
 
-    List<String> _parseStringList(dynamic val) {
+    List<String> parseStringList(dynamic val) {
       if (val == null) return [];
       if (val is List) return val.map((e) => e.toString()).toList();
       return [];
     }
 
-    List<Post> _parsePostList(dynamic val) {
+    List<Post> parsePostList(dynamic val) {
       if (val == null) return [];
       if (val is List) return val.whereType<Map<String, dynamic>>().map(Post.fromJson).toList();
       return [];
@@ -92,14 +92,14 @@ class Post {
       value: json['value'] as String? ?? '',
       mediaUrl: json['mediaUrl'] as String? ?? '',
       name: json['name'] as String? ?? '',
-      replyArr: _parseIntList(json['replyArr']),
-      sageAddId: _parseIntList(json['sageAddId']),
-      sageSubId: _parseIntList(json['sageSubId']),
+      replyArr: parseIntList(json['replyArr']),
+      sageAddId: parseIntList(json['sageAddId']),
+      sageSubId: parseIntList(json['sageSubId']),
       sageAddCount: json['sageAddCount'] as int? ?? 0,
       sageSubCount: json['sageSubCount'] as int? ?? 0,
-      lastReplyArr: _parsePostList(json['lastReplyArr']),
-      sageAddUser: _parseStringList(json['sageAddUser']),
-      sageSubUser: _parseStringList(json['sageSubUser']),
+      lastReplyArr: parsePostList(json['lastReplyArr']),
+      sageAddUser: parseStringList(json['sageAddUser']),
+      sageSubUser: parseStringList(json['sageSubUser']),
     );
   }
 }

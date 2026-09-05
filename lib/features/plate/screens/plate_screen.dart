@@ -7,7 +7,6 @@ import '../../../shared/widgets/media_upload.dart';
 import '../../../shared/widgets/media_item.dart';
 import '../../../shared/widgets/emoji_picker.dart';
 import '../providers/plate_provider.dart';
-import '../models/post_model.dart';
 
 class PlateScreen extends ConsumerStatefulWidget {
   final int plateId;

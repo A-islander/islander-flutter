@@ -7,9 +7,15 @@ import 'core/storage/storage_service.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'shared/providers/theme_provider.dart';
 
-final dioClientProvider = Provider<DioClient>((ref) => DioClient());
+final dioClientProvider = Provider<DioClient>((ref) {
+  final client = DioClient();
+  ref.onDispose(client.dispose);
+  return client;
+});
 
-final storageServiceProvider = Provider<StorageService>((ref) => throw UnimplementedError());
+final storageServiceProvider = Provider<StorageService>(
+  (ref) => throw UnimplementedError(),
+);
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   final dio = ref.watch(dioClientProvider);
@@ -17,7 +23,9 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   return AuthNotifier(storage, dio);
 });
 
-final themeModeProvider = StateNotifierProvider<ThemeModeNotifier, ThemeMode>((ref) {
+final themeModeProvider = StateNotifierProvider<ThemeModeNotifier, ThemeMode>((
+  ref,
+) {
   final storage = ref.watch(storageServiceProvider);
   return ThemeModeNotifier(storage);
 });
@@ -29,9 +37,7 @@ void main() async {
 
   runApp(
     ProviderScope(
-      overrides: [
-        storageServiceProvider.overrideWithValue(storageService),
-      ],
+      overrides: [storageServiceProvider.overrideWithValue(storageService)],
       child: const IslanderApp(),
     ),
   );

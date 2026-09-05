@@ -289,12 +289,12 @@ class _ImageThumbnail extends StatelessWidget {
           width: 150,
           height: 150,
           fit: BoxFit.cover,
-          placeholder: (_, __) => Container(
+          placeholder: (_, _) => Container(
             width: 150, height: 150,
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
             child: const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))),
           ),
-          errorWidget: (_, __, ___) => Container(
+          errorWidget: (_, _, _) => Container(
             width: 150, height: 150,
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
             child: const Icon(Icons.broken_image, size: 32),
