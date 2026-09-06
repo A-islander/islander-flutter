@@ -5,6 +5,7 @@ class DioClient {
   late final Dio _forumDio;
   late final Dio _userDio;
   String? _token;
+  int _identityEpoch = 0;
   void Function()? onUnauthorized;
 
   static bool authenticationFailed(dynamic data) {
@@ -48,6 +49,18 @@ class DioClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
+          final expected = options.extra['expectedToken'];
+          if (expected != null && (expected != _token || expected == '')) {
+            handler.reject(
+              DioException(
+                requestOptions: options,
+                type: DioExceptionType.cancel,
+                error: 'identity_changed',
+              ),
+            );
+            return;
+          }
+          options.extra['identityEpoch'] = _identityEpoch;
           if (options.extra['verifyToken'] != true &&
               _token != null &&
               _token!.isNotEmpty) {
@@ -58,6 +71,8 @@ class DioClient {
         onResponse: (response, handler) {
           final data = response.data;
           if (response.requestOptions.extra['verifyToken'] != true &&
+              response.requestOptions.extra['identityEpoch'] ==
+                  _identityEpoch &&
               authenticationFailed(data)) {
             onUnauthorized?.call();
           }
@@ -65,6 +80,7 @@ class DioClient {
         },
         onError: (error, handler) {
           if (error.requestOptions.extra['verifyToken'] != true &&
+              error.requestOptions.extra['identityEpoch'] == _identityEpoch &&
               (error.response?.statusCode == 401 ||
                   error.response?.statusCode == 403)) {
             onUnauthorized?.call();
@@ -75,8 +91,16 @@ class DioClient {
     );
   }
 
-  void setToken(String token) => _token = token;
-  void clearToken() => _token = null;
+  void setToken(String token) {
+    _identityEpoch++;
+    _token = token;
+  }
+
+  void clearToken() {
+    _identityEpoch++;
+    _token = null;
+  }
+
   void dispose() {
     _forumDio.close();
     _userDio.close();
@@ -148,10 +172,16 @@ class DioClient {
       'mediaUrl': mediaUrl,
     },
   );
-  Future<Response> sageAdd(int postId) =>
-      _forumDio.get('${ApiConstants.forumSageAdd}?postId=$postId');
-  Future<Response> sageSub(int postId) =>
-      _forumDio.get('${ApiConstants.forumSageSub}?postId=$postId');
+  Future<Response> sageAdd(int postId, {String? expectedToken}) =>
+      _forumDio.get(
+        '${ApiConstants.forumSageAdd}?postId=$postId',
+        options: Options(extra: {'expectedToken': expectedToken}),
+      );
+  Future<Response> sageSub(int postId, {String? expectedToken}) =>
+      _forumDio.get(
+        '${ApiConstants.forumSageSub}?postId=$postId',
+        options: Options(extra: {'expectedToken': expectedToken}),
+      );
   Future<Response> getSageList({
     required int page,
     int size = ApiConstants.pageSize,
@@ -159,10 +189,16 @@ class DioClient {
     ApiConstants.forumSageList,
     queryParameters: {'page': page, 'size': size},
   );
-  Future<Response> deleteOwnPost(int postId) =>
-      _forumDio.get('${ApiConstants.forumDeleteOwnPost}?postId=$postId');
-  Future<Response> recoverOwnPost(int postId) =>
-      _forumDio.get('${ApiConstants.forumRecoverOwnPost}?postId=$postId');
+  Future<Response> deleteOwnPost(int postId, {String? expectedToken}) =>
+      _forumDio.get(
+        '${ApiConstants.forumDeleteOwnPost}?postId=$postId',
+        options: Options(extra: {'expectedToken': expectedToken}),
+      );
+  Future<Response> recoverOwnPost(int postId, {String? expectedToken}) =>
+      _forumDio.get(
+        '${ApiConstants.forumRecoverOwnPost}?postId=$postId',
+        options: Options(extra: {'expectedToken': expectedToken}),
+      );
   Future<Response> getImgToken() => _forumDio.get(ApiConstants.imgToken);
   Future<Response> uploadImage(String filePath) {
     return _forumDio.post(

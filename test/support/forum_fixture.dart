@@ -144,6 +144,7 @@ Future<void> pumpForum(
     authenticated ? {'token': 'test-cookie', 'name': '测试岛民', 'userId': 7} : {},
   );
   final storage = StorageService(await SharedPreferences.getInstance());
+  await storage.initialize();
   AppRouter.router.go('/plate/0');
   await tester.pumpWidget(
     ProviderScope(

@@ -17,6 +17,7 @@ class ForumPostView extends ConsumerStatefulWidget {
     required this.post,
     required this.boardName,
     this.preview = false,
+    this.showDeletionStatus = false,
     this.onOpen,
     this.onReply,
     this.onChanged,
@@ -26,6 +27,7 @@ class ForumPostView extends ConsumerStatefulWidget {
   final Post post;
   final String boardName;
   final bool preview;
+  final bool showDeletionStatus;
   final bool highlighted;
   final VoidCallback? onOpen;
   final ValueChanged<int>? onReply;
@@ -61,16 +63,37 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
 
   Future<void> _action(String action) async {
     if (_busy) return;
+    final actionToken = ref.read(authProvider).token;
     if (!ref.read(authProvider).isLoggedIn) {
       await forumSheet(context, CookieSheet());
       return;
     }
-    if (action == 'delete') {
+    if (action == 'delete' || action == 'recover') {
+      final recovering = action == 'recover';
+      final kind = _post.followId == 0 ? '串' : '回复';
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text('删除 No.${_post.id}？'),
-          content: Text('可以在“我的内容”中恢复。'),
+          scrollable: true,
+          title: Text('${recovering ? '恢复' : '删除'} No.${_post.id}？'),
+          content: recovering
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('恢复后，这条$kind将重新对其他岛民可见。确认恢复吗？'),
+                    if (_post.title.isNotEmpty || _post.value.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        _post.title.isNotEmpty ? _post.title : _post.value,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: ForumPalette.of(context).muted),
+                      ),
+                    ],
+                  ],
+                )
+              : Text('可以在“我的内容”中恢复。'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -78,23 +101,33 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: Text('删除'),
+              child: Text(recovering ? '恢复' : '删除'),
             ),
           ],
         ),
       );
       if (confirmed != true || !mounted) return;
     }
+    if (ref.read(authProvider).token != actionToken) return;
     setState(() => _busy = true);
     final repo = ref.read(forumRepositoryProvider);
     try {
       if (action == 'delete' || action == 'recover') {
-        await repo.changeVisibility(_post.id, recover: action == 'recover');
-        widget.onChanged?.call();
+        await repo.changeVisibility(
+          _post.id,
+          recover: action == 'recover',
+          expectedToken: actionToken,
+        );
+        if (mounted && ref.read(authProvider).token == actionToken) {
+          widget.onChanged?.call();
+        }
       } else {
-        await repo.vote(_post.id, action == 'sage');
+        await repo.vote(_post.id, action == 'sage', expectedToken: actionToken);
+        if (!mounted || ref.read(authProvider).token != actionToken) return;
         final updated = await repo.post(_post.id);
-        if (mounted) setState(() => _post = updated);
+        if (mounted && ref.read(authProvider).token == actionToken) {
+          setState(() => _post = updated);
+        }
       }
     } catch (error) {
       if (mounted) {
@@ -105,6 +138,93 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Widget _actions(Post post, int userId) {
+    final palette = ForumPalette.of(context);
+    PopupMenuItem<String> item(
+      String value,
+      String label,
+      IconData icon, {
+      bool selected = false,
+      bool destructive = false,
+    }) {
+      final color = destructive
+          ? Theme.of(context).colorScheme.error
+          : selected
+          ? palette.accent
+          : palette.ink;
+      return PopupMenuItem<String>(
+        value: value,
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: color),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(label, style: TextStyle(color: color)),
+            ),
+            if (selected) Icon(Icons.check, size: 18, color: palette.accent),
+          ],
+        ),
+      );
+    }
+
+    return Align(
+      alignment: Alignment.centerRight,
+      child: PopupMenuButton<String>(
+        key: ValueKey('post-actions-${post.id}'),
+        tooltip: '更多操作 · No.${post.id}',
+        enabled: !_busy,
+        constraints: BoxConstraints(minWidth: 220, maxWidth: 260),
+        color: palette.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: palette.line),
+        ),
+        onSelected: (action) {
+          if (action == 'reply') {
+            widget.onReply?.call(post.id);
+          } else {
+            _action(action);
+          }
+        },
+        itemBuilder: (_) => [
+          if (!widget.preview) ...[
+            if (widget.onReply != null)
+              item('reply', '引用回复', Icons.reply_outlined),
+            item(
+              'sage',
+              'SAGE ${post.sageAddCount}',
+              Icons.arrow_downward_rounded,
+              selected: userId > 0 && post.sageAddId.contains(userId),
+            ),
+            item(
+              'unsage',
+              '反对 SAGE ${post.sageSubCount}',
+              Icons.arrow_upward_rounded,
+              selected: userId > 0 && post.sageSubId.contains(userId),
+            ),
+          ],
+          if (userId > 0 && userId == post.userId) ...[
+            if (!widget.preview) PopupMenuDivider(),
+            item(
+              post.isDeleted ? 'recover' : 'delete',
+              post.isDeleted ? '恢复内容' : '删除内容',
+              post.isDeleted ? Icons.restore_rounded : Icons.delete_outline,
+              destructive: !post.isDeleted,
+            ),
+          ],
+        ],
+        icon: _busy
+            ? SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(Icons.more_horiz, color: palette.muted),
+      ),
+    );
   }
 
   @override
@@ -200,7 +320,33 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
                               fontSize: 11,
                             ),
                           ),
-                        if (p.isDeleted)
+                        if (widget.showDeletionStatus)
+                          Container(
+                            key: ValueKey('post-deletion-status-${p.id}'),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: p.isDeleted
+                                  ? Theme.of(context).colorScheme.errorContainer
+                                  : ForumPalette.of(context).soft,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              p.isDeleted ? '已删除' : '未删除',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: p.isDeleted
+                                    ? Theme.of(
+                                        context,
+                                      ).colorScheme.onErrorContainer
+                                    : ForumPalette.of(context).accent,
+                              ),
+                            ),
+                          )
+                        else if (p.isDeleted)
                           Text(
                             '已删除',
                             style: TextStyle(
@@ -262,18 +408,6 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
                     color: ForumPalette.of(context).ink,
                   ),
                 ),
-              if (p.replyArr.isNotEmpty && !widget.preview)
-                Wrap(
-                  spacing: 8,
-                  children: p.replyArr
-                      .map(
-                        (id) => TextButton(
-                          onPressed: () => _quote(id),
-                          child: Text('引用 No.$id'),
-                        ),
-                      )
-                      .toList(),
-                ),
               if (media.isNotEmpty)
                 Padding(
                   padding: EdgeInsets.only(top: 12),
@@ -288,16 +422,6 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
                 ),
               if (widget.preview) ...[
                 SizedBox(height: 16),
-                if (userId > 0 && userId == p.userId)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: _busy
-                          ? null
-                          : () => _action(p.isDeleted ? 'recover' : 'delete'),
-                      child: Text(p.isDeleted ? '恢复内容' : '删除内容'),
-                    ),
-                  ),
                 Text(
                   '${p.replyCount} 个回复${p.sageAddCount > 0 ? '     SAGE ${p.sageAddCount}' : ''}',
                   style: TextStyle(
@@ -343,44 +467,6 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
                       ),
                     ),
                   ),
-              ] else if (widget.depth == 0) ...[
-                SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    TextButton(
-                      onPressed: () => widget.onReply?.call(p.id),
-                      child: Text('引用回复'),
-                    ),
-                    TextButton(
-                      onPressed: _busy ? null : () => _action('sage'),
-                      child: Text(
-                        '${p.sageAddId.contains(userId) ? '✓ ' : ''}SAGE ${p.sageAddCount}',
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: _busy ? null : () => _action('unsage'),
-                      child: Text(
-                        '${p.sageSubId.contains(userId) ? '✓ ' : ''}反对 SAGE ${p.sageSubCount}',
-                      ),
-                    ),
-                    if (userId > 0 && userId == p.userId)
-                      PopupMenuButton<String>(
-                        enabled: !_busy,
-                        tooltip: '管理自己的内容',
-                        onSelected: _action,
-                        itemBuilder: (_) => [
-                          PopupMenuItem(
-                            value: p.isDeleted ? 'recover' : 'delete',
-                            child: Text(p.isDeleted ? '恢复内容' : '删除内容'),
-                          ),
-                        ],
-                        icon: Icon(Icons.more_horiz),
-                      ),
-                  ],
-                ),
               ],
               ..._quotes.entries.map(
                 (entry) => Container(
@@ -440,6 +526,11 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
                   ),
                 ),
               ),
+              if (widget.depth == 0 &&
+                  (!widget.preview || (userId > 0 && userId == p.userId))) ...[
+                SizedBox(height: 6),
+                _actions(p, userId),
+              ],
             ],
           ),
         ),

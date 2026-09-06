@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'forum_back_transition.dart';
 
 abstract final class ForumColors {
   static const accent = Color(0xFF007A73);
@@ -50,6 +51,12 @@ ThemeData forumTheme({Brightness brightness = Brightness.light}) {
     useMaterial3: true,
     brightness: brightness,
     scaffoldBackgroundColor: colors.canvas,
+    pageTransitionsTheme: PageTransitionsTheme(
+      builders: {
+        ...const PageTransitionsTheme().builders,
+        TargetPlatform.android: const ForumBackTransitionsBuilder(),
+      },
+    ),
     colorScheme: ColorScheme.fromSeed(
       seedColor: ForumColors.accent,
       brightness: brightness,

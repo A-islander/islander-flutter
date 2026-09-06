@@ -40,6 +40,15 @@ migrate_working_dir/
 /android/.kotlin/
 **/.cxx/
 
+# Signing material belongs outside this checkout, including debug keys.
+.signing/
+*.keystore
+*.jks
+*.p12
+*.pfx
+key.properties
+debug.properties
+
 # Symbolication related
 app.*.symbols
 

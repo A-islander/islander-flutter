@@ -44,6 +44,9 @@ class ForumRepository {
       }
       return data['data'];
     } on DioException catch (error) {
+      if (error.error == 'identity_changed') {
+        throw const ForumFailure('饼干已切换，请关闭并重新打开编辑器');
+      }
       if (error.response?.statusCode == 401 ||
           error.response?.statusCode == 403) {
         throw const ForumFailure('饼干无效或已过期，请重新导入饼干');
@@ -122,6 +125,7 @@ class ForumRepository {
     required int boardId,
     int? threadId,
     List<MediaItem> media = const [],
+    String? expectedToken,
   }) async {
     if (body.trim().isEmpty || utf8.encode(body).length > 8192) {
       throw const ForumFailure('正文不能为空，且不能超过 8192 字节（约 2700 个汉字）');
@@ -157,6 +161,7 @@ class ForumRepository {
       client.forumDio.post(
         threadId == null ? 'forum/post' : 'forum/reply',
         data: payload,
+        options: Options(extra: {'expectedToken': ?expectedToken}),
       ),
     );
   }
@@ -190,13 +195,23 @@ class ForumRepository {
     return token;
   }
 
-  Future<void> vote(int id, bool add) async {
-    await _read(add ? client.sageAdd(id) : client.sageSub(id));
+  Future<void> vote(int id, bool add, {String? expectedToken}) async {
+    await _read(
+      add
+          ? client.sageAdd(id, expectedToken: expectedToken)
+          : client.sageSub(id, expectedToken: expectedToken),
+    );
   }
 
-  Future<void> changeVisibility(int id, {required bool recover}) async {
+  Future<void> changeVisibility(
+    int id, {
+    required bool recover,
+    String? expectedToken,
+  }) async {
     final data = await _read(
-      recover ? client.recoverOwnPost(id) : client.deleteOwnPost(id),
+      recover
+          ? client.recoverOwnPost(id, expectedToken: expectedToken)
+          : client.deleteOwnPost(id, expectedToken: expectedToken),
     );
     if (data is! Map || data['status'] != true) {
       throw const ForumFailure('操作未成功，可能没有权限');
@@ -206,8 +221,9 @@ class ForumRepository {
   Future<MediaItem> upload(
     XFile file,
     String type,
-    void Function(int, int) onProgress,
-  ) async {
+    void Function(int, int) onProgress, {
+    String? expectedToken,
+  }) async {
     if (await file.length() > 20 * 1024 * 1024) {
       throw const ForumFailure('单个文件不能超过 20 MB');
     }
@@ -221,6 +237,7 @@ class ForumRepository {
           ),
         }),
         onSendProgress: onProgress,
+        options: Options(extra: {'expectedToken': ?expectedToken}),
       ),
     );
     final url = data is Map

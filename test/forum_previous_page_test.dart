@@ -31,6 +31,60 @@ int reads(ForumFixture fixture, int page) => fixture.requests
     .length;
 
 void main() {
+  testWidgets(
+    'first page has no previous-page hint or reserved control space',
+    (tester) async {
+      await pumpForum(tester, ForumFixture(), size: const Size(390, 640));
+      expect(find.text('已到第一页，下拉刷新'), findsNothing);
+      expect(find.byKey(const Key('previous-page-control')), findsNothing);
+      expect(find.byKey(const Key('forum-refresh')), findsOneWidget);
+      expect(find.text('测试主串 10'), findsOneWidget);
+      await pull(tester);
+      expect(find.byKey(const Key('previous-page-control')), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('final prepend removes the control without moving the read row', (
+    tester,
+  ) async {
+    final fixture = ForumFixture()..listCount = 61;
+    await pumpForum(tester, fixture, size: const Size(390, 640));
+    await jump(tester, '2');
+    final before = tester.getTopLeft(find.text('测试主串 20')).dy;
+    final rowState = tester.state(find.byKey(const ValueKey('post-20')));
+    tester
+        .widget<TextButton>(find.byKey(const Key('load-previous-button')))
+        .onPressed!();
+    await pumpFrames(tester);
+    expect(find.text('1–2 / 4'), findsOneWidget);
+    expect(find.byKey(const Key('previous-page-control')), findsNothing);
+    expect(tester.getTopLeft(find.text('测试主串 20')).dy, closeTo(before, 1));
+    expect(tester.state(find.byKey(const ValueKey('post-20'))), same(rowState));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('empty previous page collapses the control and stops retrying', (
+    tester,
+  ) async {
+    final fixture = ForumFixture()..listCount = 61;
+    await pumpForum(tester, fixture, size: const Size(390, 640));
+    await jump(tester, '2');
+    fixture.overrideResponse = {
+      'code': 200,
+      'data': {'count': 61, 'list': []},
+    };
+    tester
+        .widget<TextButton>(find.byKey(const Key('load-previous-button')))
+        .onPressed!();
+    await pumpFrames(tester);
+    expect(find.byKey(const Key('previous-page-control')), findsNothing);
+    expect(find.text('测试主串 20'), findsOneWidget);
+    expect(scroll(tester).offset, 0);
+    expect(reads(fixture, 0), 2);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('clearing a filter does not compensate the same prepend twice', (
     tester,
   ) async {

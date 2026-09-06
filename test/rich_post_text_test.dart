@@ -18,6 +18,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final storageService = StorageService(prefs);
+    await storageService.initialize();
 
     await tester.pumpWidget(
       ProviderScope(
@@ -156,6 +157,8 @@ void main() {
 }
 
 class PostCardHeaderSample extends StatelessWidget {
+  const PostCardHeaderSample({super.key});
+
   @override
   Widget build(BuildContext context) {
     return PostCardHeader(

@@ -34,6 +34,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
   final storageService = StorageService(prefs);
+  await storageService.initialize();
 
   runApp(
     ProviderScope(

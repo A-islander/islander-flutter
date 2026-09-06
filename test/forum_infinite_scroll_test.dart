@@ -36,6 +36,12 @@ void main() {
       final button = find.byKey(const Key('end-refresh'));
       await tester.ensureVisible(button);
       await pumpFrames(tester);
+      expect(find.text('已经到底了'), findsNothing);
+      expect(
+        find.descendant(of: button, matching: find.text('已经到底了，点击刷新')),
+        findsOneWidget,
+      );
+      expect(tester.getSize(button).height, greaterThanOrEqualTo(48));
       await tester.tap(button);
       await pumpFrames(tester);
       expect(reads(fixture, 0), 2);
@@ -46,6 +52,23 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('merged end refresh fits a narrow phone with large text', (
+    tester,
+  ) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await pumpForum(
+      tester,
+      ForumFixture()..listCount = 1,
+      size: const Size(320, 720),
+    );
+    await tester.ensureVisible(find.byKey(const Key('end-refresh')));
+    await pumpFrames(tester);
+    expect(find.text('已经到底了，点击刷新'), findsOneWidget);
+    expect(find.text('已经到底了'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('refresh discards a pending append', (tester) async {
     final gate = Completer<void>();

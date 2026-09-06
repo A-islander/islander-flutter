@@ -11,6 +11,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final storageService = StorageService(prefs);
+    await storageService.initialize();
 
     await tester.pumpWidget(
       ProviderScope(

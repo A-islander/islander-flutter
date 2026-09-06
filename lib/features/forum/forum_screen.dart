@@ -34,6 +34,7 @@ class ForumScreen extends ConsumerStatefulWidget {
 }
 
 class _ForumScreenState extends ConsumerState<ForumScreen> {
+  static const _previousControlExtent = 60.0;
   final _scaffold = GlobalKey<ScaffoldState>();
   final _scroll = ScrollController();
   final _search = TextEditingController();
@@ -345,19 +346,10 @@ class _ForumScreenState extends ConsumerState<ForumScreen> {
         _previousExhausted = data.posts.isEmpty;
         // Only the newest prepended page is eagerly measured; all remaining
         // pages return to the lazy list. Stable global page keys retain rows.
-        _prependPage = added.any((post) => !_isThread || post.id != _thread?.id)
-            ? previousPage
-            : _prependPage;
-        _pendingPrependPage =
-            added.any(
-              (post) =>
-                  (!_isThread || post.id != _thread?.id) &&
-                  '${post.id} ${post.title} ${post.value}'
-                      .toLowerCase()
-                      .contains(_query.toLowerCase()),
-            )
-            ? previousPage
-            : null;
+        // Include the previous-page control in the layout correction: reaching
+        // page one removes its 60px height, even if no visible rows were added.
+        _prependPage = previousPage;
+        _pendingPrependPage = previousPage;
         _loadingPrevious = false;
       });
     } catch (error) {
@@ -462,8 +454,8 @@ class _ForumScreenState extends ConsumerState<ForumScreen> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     ref.listen(authProvider, (previous, next) {
-      if (_isMine && previous?.token != next.token) {
-        _load(page: 0);
+      if (previous?.token != next.token) {
+        _load(page: _isMine ? 0 : _startPage);
       }
     });
     final boards = ref.watch(forumBoardsProvider);
@@ -523,6 +515,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen> {
       children: posts
           .map(
             (post) => ForumPostView(
+              showDeletionStatus: _isMine,
               key: post.id == _highlightId
                   ? _targetKey
                   : ValueKey('post-${post.id}'),
@@ -1086,75 +1079,78 @@ class _ForumScreenState extends ConsumerState<ForumScreen> {
                                               _error == null &&
                                               !(_isMine &&
                                                   !auth.isLoggedIn)) ...[
-                                            if (_count > 0)
-                                              SliverToBoxAdapter(
-                                                child: SizedBox(
-                                                  height: 60,
-                                                  child: Center(
-                                                    child: _loadingPrevious
-                                                        ? SizedBox(
-                                                            key: Key(
-                                                              'load-previous-progress',
-                                                            ),
-                                                            width: 20,
-                                                            height: 20,
-                                                            child:
-                                                                CircularProgressIndicator(
-                                                                  strokeWidth:
-                                                                      2,
+                                            PrependSliver(
+                                              key: ValueKey(
+                                                'prepend-$_prependPage',
+                                              ),
+                                              compensate:
+                                                  _pendingPrependPage != null,
+                                              onAdjusted: () =>
+                                                  _pendingPrependPage = null,
+                                              replacedExtent:
+                                                  _previousControlExtent,
+                                              sliver: SliverMainAxisGroup(
+                                                slivers: [
+                                                  if (_count > 0 &&
+                                                      (_loadingPrevious ||
+                                                          _previousError !=
+                                                              null ||
+                                                          _hasPrevious))
+                                                    SliverToBoxAdapter(
+                                                      child: SizedBox(
+                                                        key: Key(
+                                                          'previous-page-control',
+                                                        ),
+                                                        height:
+                                                            _previousControlExtent,
+                                                        child: Center(
+                                                          child:
+                                                              _loadingPrevious
+                                                              ? SizedBox(
+                                                                  key: Key(
+                                                                    'load-previous-progress',
+                                                                  ),
+                                                                  width: 20,
+                                                                  height: 20,
+                                                                  child: CircularProgressIndicator(
+                                                                    strokeWidth:
+                                                                        2,
+                                                                  ),
+                                                                )
+                                                              : _previousError !=
+                                                                    null
+                                                              ? TextButton(
+                                                                  key: Key(
+                                                                    'load-previous-retry',
+                                                                  ),
+                                                                  onPressed:
+                                                                      _loadPrevious,
+                                                                  child: Text(
+                                                                    '上一页加载失败，点击重试',
+                                                                  ),
+                                                                )
+                                                              : TextButton(
+                                                                  key: Key(
+                                                                    'load-previous-button',
+                                                                  ),
+                                                                  onPressed:
+                                                                      _loadPrevious,
+                                                                  child: Text(
+                                                                    '继续下拉，或点击加载上一页 ↑',
+                                                                  ),
                                                                 ),
-                                                          )
-                                                        : _previousError != null
-                                                        ? TextButton(
-                                                            key: Key(
-                                                              'load-previous-retry',
-                                                            ),
-                                                            onPressed:
-                                                                _loadPrevious,
-                                                            child: Text(
-                                                              '上一页加载失败，点击重试',
-                                                            ),
-                                                          )
-                                                        : _hasPrevious
-                                                        ? TextButton(
-                                                            key: Key(
-                                                              'load-previous-button',
-                                                            ),
-                                                            onPressed:
-                                                                _loadPrevious,
-                                                            child: Text(
-                                                              '继续下拉，或点击加载上一页 ↑',
-                                                            ),
-                                                          )
-                                                        : Text(
-                                                            _previousExhausted
-                                                                ? '没有更早的内容，下拉刷新'
-                                                                : '已到第一页，下拉刷新',
-                                                            style: TextStyle(
-                                                              fontSize: 12,
-                                                              color:
-                                                                  ForumPalette.of(
-                                                                    context,
-                                                                  ).muted,
-                                                            ),
-                                                          ),
-                                                  ),
-                                                ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  if (prepended != null)
+                                                    SliverToBoxAdapter(
+                                                      child: pageView(
+                                                        prepended,
+                                                      ),
+                                                    ),
+                                                ],
                                               ),
-                                            if (prepended != null)
-                                              PrependSliver(
-                                                compensate:
-                                                    _pendingPrependPage ==
-                                                    _prependPage,
-                                                onAdjusted: () =>
-                                                    _pendingPrependPage = null,
-                                                key: ValueKey(
-                                                  'prepend-$_prependPage',
-                                                ),
-                                                sliver: SliverToBoxAdapter(
-                                                  child: pageView(prepended),
-                                                ),
-                                              ),
+                                            ),
                                             SliverList.builder(
                                               key: ValueKey(
                                                 'forward-$_prependPage',
@@ -1227,25 +1223,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen> {
                                                             '继续上滑，或点击加载更多 ↓',
                                                           ),
                                                         )
-                                                      else ...[
-                                                        Padding(
-                                                          key: Key(
-                                                            'load-more-end',
-                                                          ),
-                                                          padding:
-                                                              EdgeInsets.all(
-                                                                12,
-                                                              ),
-                                                          child: Text(
-                                                            '已经到底了',
-                                                            style: TextStyle(
-                                                              color:
-                                                                  ForumPalette.of(
-                                                                    context,
-                                                                  ).muted,
-                                                            ),
-                                                          ),
-                                                        ),
+                                                      else
                                                         TextButton.icon(
                                                           key: const Key(
                                                             'end-refresh',
@@ -1259,11 +1237,24 @@ class _ForumScreenState extends ConsumerState<ForumScreen> {
                                                             Icons.refresh,
                                                             size: 18,
                                                           ),
+                                                          style: TextButton.styleFrom(
+                                                            minimumSize:
+                                                                const Size(
+                                                                  48,
+                                                                  48,
+                                                                ),
+                                                            foregroundColor:
+                                                                ForumPalette.of(
+                                                                  context,
+                                                                ).accent,
+                                                          ),
                                                           label: const Text(
-                                                            '刷新',
+                                                            '已经到底了，点击刷新',
+                                                            key: Key(
+                                                              'load-more-end',
+                                                            ),
                                                           ),
                                                         ),
-                                                      ],
                                                       Text(
                                                         '已加载第 $_pageRange 页 · 共 $_pages 页',
                                                         style: TextStyle(
