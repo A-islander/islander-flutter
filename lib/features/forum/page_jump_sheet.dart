@@ -16,9 +16,11 @@ class PageJumpSheet extends StatefulWidget {
     required this.totalPages,
     required this.title,
     this.isThread = false,
+    this.hasMore = true,
   });
   final int currentPage;
-  final int totalPages;
+  final int? totalPages;
+  final bool hasMore;
   final String title;
   final bool isThread;
   @override
@@ -81,7 +83,7 @@ class _PageJumpSheetState extends State<PageJumpSheet> {
           ),
           SizedBox(height: 12),
           Text(
-            '${widget.title} · 当前第 ${widget.currentPage + 1} 页，共 ${widget.totalPages} 页',
+            '${widget.title} · 当前第 ${widget.currentPage + 1} 页${widget.totalPages == null ? '，总页数未知' : '，共 ${widget.totalPages} 页'}',
             style: TextStyle(
               color: ForumPalette.of(context).muted,
               height: 1.7,
@@ -108,13 +110,19 @@ class _PageJumpSheetState extends State<PageJumpSheet> {
                   onFieldSubmitted: (_) => _submit(),
                   decoration: InputDecoration(
                     labelText: '页码',
-                    hintText: '1—${widget.totalPages}',
-                    suffixText: '/ ${widget.totalPages}',
+                    hintText: widget.totalPages == null
+                        ? '输入页码'
+                        : '1—${widget.totalPages}',
+                    suffixText: widget.totalPages == null
+                        ? null
+                        : '/ ${widget.totalPages}',
                   ),
                   validator: (value) {
                     final page = int.tryParse(value?.trim() ?? '');
-                    return page == null || page < 1 || page > widget.totalPages
-                        ? '请输入 1—${widget.totalPages} 之间的页码'
+                    return page == null ||
+                            page < 1 ||
+                            page > (widget.totalPages ?? 1000000)
+                        ? '请输入 1—${widget.totalPages ?? 1000000} 之间的页码'
                         : null;
                   },
                 ),
@@ -145,7 +153,10 @@ class _PageJumpSheetState extends State<PageJumpSheet> {
               SizedBox(width: 12),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: widget.currentPage + 1 >= widget.totalPages
+                  onPressed:
+                      !widget.hasMore ||
+                          widget.totalPages != null &&
+                              widget.currentPage + 1 >= widget.totalPages!
                       ? null
                       : () => _go(widget.currentPage + 1),
                   icon: Icon(Icons.arrow_forward, size: 16),
@@ -163,13 +174,14 @@ class _PageJumpSheetState extends State<PageJumpSheet> {
                 onPressed: widget.currentPage == 0 ? null : () => _go(0),
                 child: Text('回到首页'),
               ),
-              TextButton(
-                onPressed: widget.currentPage + 1 >= widget.totalPages
-                    ? null
-                    : () => _go(widget.totalPages - 1),
-                child: Text('跳到末页'),
-              ),
-              if (widget.isThread)
+              if (widget.totalPages != null)
+                TextButton(
+                  onPressed: widget.currentPage + 1 >= widget.totalPages!
+                      ? null
+                      : () => _go(widget.totalPages! - 1),
+                  child: Text('跳到末页'),
+                ),
+              if (widget.isThread && widget.totalPages != null)
                 TextButton.icon(
                   key: Key('page-jump-latest'),
                   onPressed: () =>

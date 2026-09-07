@@ -145,7 +145,7 @@ void main() {
           progress: progress,
         );
         final current = tester.getRect(page);
-        final scale = 1 - .08 * Curves.easeOutCubic.transform(progress);
+        final scale = 1 - .08 * progress;
         expect(current.width, closeTo(original.width * scale, .01));
         expect(current.height, closeTo(original.height * scale, .01));
         expect(current.center.dx, closeTo(original.center.dx, .01));
@@ -159,8 +159,10 @@ void main() {
         expect(currentTitle.center.dy, closeTo(expectedTitleCenter.dy, .01));
       }
       await backEvent(tester, 'cancelBackGesture');
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 156));
+      await tester.pump();
       expect(tester.getRect(page), original);
+      expect(find.byKey(const ValueKey('forum-back-scale')), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
@@ -185,14 +187,14 @@ void main() {
           final leaving = tester.getRect(page);
           expect(leaving.center.dx, closeTo(original.center.dx, .01));
           expect(leaving.center.dy, closeTo(original.center.dy, .01));
-          expect(leaving.width, lessThanOrEqualTo(width + .01));
-          await tester.pump(const Duration(milliseconds: 300));
+          expect(leaving.width, lessThan(width * .6));
+          await tester.pump(const Duration(milliseconds: 100));
           final nearlyGone = tester.getRect(page);
           expect(nearlyGone.width, lessThan(original.width * .1));
           expect(nearlyGone.height, lessThan(original.height * .1));
           expect(nearlyGone.center.dx, closeTo(original.center.dx, .01));
           expect(nearlyGone.center.dy, closeTo(original.center.dy, .01));
-          await tester.pumpAndSettle();
+          await tester.pump(const Duration(milliseconds: 60));
           expect(page, findsNothing);
           expect(find.text('list-page'), findsOneWidget);
           expect(tester.takeException(), isNull);

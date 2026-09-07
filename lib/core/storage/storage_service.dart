@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'cookie_identity.dart';
+import '../../features/forum/domain/forum_site.dart';
 
 class StorageService {
   static const String keyToken = 'token';
@@ -13,7 +14,37 @@ class StorageService {
 
   final SharedPreferences _prefs;
 
-  StorageService(this._prefs);
+  StorageService(this._prefs, {ForumSite? islanderSite})
+    : _islanderSite = islanderSite ?? ForumSite.islander;
+  final ForumSite _islanderSite;
+  bool get _legacyInstance =>
+      _islanderSite.id == 'islander' &&
+      _islanderSite.endpoint == 'https://forum-api.islander.top/' &&
+      _islanderSite.identityEndpoint == 'https://user-api.islander.top/';
+  String get _vaultStorageKey => _legacyInstance
+      ? vaultKey
+      : 'islander.cookie-vault.v2.${_islanderSite.instanceKey}';
+  String get _draftPrefix => _legacyInstance
+      ? 'islander.draft.v1.'
+      : 'islander.draft.v2.${_islanderSite.instanceKey}.';
+
+  Map<String, dynamic>? readForumState(String key) => readDraft(key);
+  Future<void> saveForumState(String key, Map<String, dynamic> value) =>
+      saveDraft(key, value);
+
+  Future<String?> readExternalVault(String instanceKey) => kIsWeb
+      ? Future.value(
+          _prefs.getString('islander.external-vault.v1.$instanceKey'),
+        )
+      : _secure.read(key: 'islander.external-vault.v1.$instanceKey');
+  Future<void> writeExternalVault(String instanceKey, String value) async {
+    final key = 'islander.external-vault.v1.$instanceKey';
+    if (kIsWeb) {
+      if (!await _prefs.setString(key, value)) throw StateError('保存失败');
+    } else {
+      await _secure.write(key: key, value: value);
+    }
+  }
 
   static const vaultKey = 'islander.cookie-vault.v1';
   final _secure = const FlutterSecureStorage(
@@ -26,8 +57,8 @@ class StorageService {
   Future<void> initialize() async {
     try {
       final raw = kIsWeb
-          ? _prefs.getString(vaultKey)
-          : await _secure.read(key: vaultKey);
+          ? _prefs.getString(_vaultStorageKey)
+          : await _secure.read(key: _vaultStorageKey);
       if (raw != null) {
         final data = jsonDecode(raw) as Map<String, dynamic>;
         if (data['version'] != 1) {
@@ -46,7 +77,7 @@ class StorageService {
         cookies = List.unmodifiable(entries);
         activeCookieId = active;
       } else {
-        final legacy = getToken()?.trim() ?? '';
+        final legacy = _legacyInstance ? getToken()?.trim() ?? '' : '';
         final entries = legacy.isEmpty
             ? <CookieIdentity>[]
             : [
@@ -60,7 +91,8 @@ class StorageService {
         await saveCookies(entries, entries.firstOrNull?.id);
       }
       // Only remove legacy plaintext after the secure write succeeds.
-      for (final key in [keyToken, keyName, keyUserId]) {
+      for (final key
+          in _legacyInstance ? [keyToken, keyName, keyUserId] : <String>[]) {
         if (_prefs.containsKey(key) && !await _prefs.remove(key)) {
           throw StateError('Migration failed');
         }
@@ -83,18 +115,18 @@ class StorageService {
       'cookies': entries.map((e) => e.toJson()).toList(),
     });
     if (kIsWeb) {
-      if (!await _prefs.setString(vaultKey, raw)) {
+      if (!await _prefs.setString(_vaultStorageKey, raw)) {
         throw StateError('Storage failed');
       }
     } else {
-      await _secure.write(key: vaultKey, value: raw);
+      await _secure.write(key: _vaultStorageKey, value: raw);
     }
     cookies = List.unmodifiable(entries);
     activeCookieId = activeId;
   }
 
   String draftKey(String cookieId, int boardId, int? threadId) =>
-      'islander.draft.v1.$cookieId.${threadId == null ? 'board.$boardId' : 'thread.$threadId'}';
+      '$_draftPrefix$cookieId.${threadId == null ? 'board.$boardId' : 'thread.$threadId'}';
   Map<String, dynamic>? readDraft(String key) {
     final raw = _prefs.getString(key);
     return raw == null ? null : jsonDecode(raw) as Map<String, dynamic>;
@@ -116,7 +148,7 @@ class StorageService {
   Future<void> removeDrafts(String cookieId) async {
     await _draftWrites;
     for (final key in _prefs.getKeys().where(
-      (k) => k.startsWith('islander.draft.v1.$cookieId.'),
+      (k) => k.startsWith('$_draftPrefix$cookieId.'),
     )) {
       await saveDraft(key, null);
     }

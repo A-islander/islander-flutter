@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'forum_preview_text.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:video_player/video_player.dart';
@@ -23,6 +25,7 @@ class ForumPostView extends ConsumerStatefulWidget {
     this.onChanged,
     this.highlighted = false,
     this.depth = 0,
+    this.ancestors = const {},
   });
   final Post post;
   final String boardName;
@@ -33,23 +36,89 @@ class ForumPostView extends ConsumerStatefulWidget {
   final ValueChanged<int>? onReply;
   final VoidCallback? onChanged;
   final int depth;
+  final Set<PostKey> ancestors;
   @override
   ConsumerState<ForumPostView> createState() => _ForumPostViewState();
 }
 
 class _ForumPostViewState extends ConsumerState<ForumPostView> {
   final _quotes = <int, Future<Post>>{};
+  Timer? _previewTimer;
+  int _previewGeneration = 0;
+  List<Post>? _hoverReplies;
+  bool _previewBusy = false;
   bool _busy = false;
   late Post _post = widget.post;
   @override
   void didUpdateWidget(covariant ForumPostView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.post != widget.post) _post = widget.post;
+    if (oldWidget.post != widget.post) {
+      _post = widget.post;
+      _previewTimer?.cancel();
+      _previewGeneration++;
+      _previewBusy = false;
+      _hoverReplies = null;
+      if (oldWidget.post.key != widget.post.key) _quotes.clear();
+    }
+  }
+
+  void _preview() {
+    if (!widget.preview ||
+        MediaQuery.sizeOf(context).width < 1024 ||
+        _hoverReplies != null ||
+        _previewBusy ||
+        _post.lastReplyArr.length >= 5 ||
+        _post.replyCount <= _post.lastReplyArr.length) {
+      return;
+    }
+    final generation = ++_previewGeneration;
+    _previewTimer?.cancel();
+    _previewTimer = Timer(const Duration(milliseconds: 180), () async {
+      if (!mounted || generation != _previewGeneration) return;
+      _previewBusy = true;
+      final repo = ref.read(forumRepositoryProvider);
+      final identity = ref.read(authProvider).token;
+      try {
+        final page = await repo.page(kind: 'thread', postId: _post.id);
+        if (!mounted ||
+            generation != _previewGeneration ||
+            repo.site.isIslander && identity != ref.read(authProvider).token) {
+          return;
+        }
+        setState(
+          () => _hoverReplies = page.posts
+              .where((p) => p.id != _post.id)
+              .take(5)
+              .toList(),
+        );
+      } catch (_) {
+        // A preview failure never replaces the readable row or writes history.
+      } finally {
+        if (mounted && generation == _previewGeneration) _previewBusy = false;
+      }
+    });
+  }
+
+  void _leavePreview() {
+    _previewTimer?.cancel();
+    _previewGeneration++;
+    _previewBusy = false;
+  }
+
+  @override
+  void dispose() {
+    _leavePreview();
+    super.dispose();
   }
 
   void _quote(int id) {
-    if (widget.depth >= 3) {
-      context.push('/post/$id');
+    final target = PostKey(_post.site.instanceKey, '$id');
+    if (widget.depth >= 3 ||
+        target == _post.key ||
+        widget.ancestors.contains(target)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已到引用层级上限或遇到循环引用')));
       return;
     }
     setState(() {
@@ -62,6 +131,10 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
   }
 
   Future<void> _action(String action) async {
+    if (!ref.read(forumRepositoryProvider).capabilities.manage &&
+        !ref.read(forumRepositoryProvider).capabilities.sage) {
+      return;
+    }
     if (_busy) return;
     final actionToken = ref.read(authProvider).token;
     if (!ref.read(authProvider).isLoggedIn) {
@@ -141,6 +214,10 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
   }
 
   Widget _actions(Post post, int userId) {
+    if (!ref.read(forumRepositoryProvider).capabilities.sage &&
+        !ref.read(forumRepositoryProvider).capabilities.manage) {
+      return const SizedBox.shrink();
+    }
     final palette = ForumPalette.of(context);
     PopupMenuItem<String> item(
       String value,
@@ -230,7 +307,7 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
   @override
   Widget build(BuildContext context) {
     final p = _post;
-    final userId = ref.watch(authProvider).userId;
+    final userId = p.site.isIslander ? ref.watch(authProvider).userId : 0;
     if (p.isDeleted && (userId <= 0 || userId != p.userId)) {
       return Padding(
         padding: EdgeInsets.all(24),
@@ -246,292 +323,312 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
         ? 20.0
         : 36.0;
     final media = MediaItem.parseMediaUrl(p.mediaUrl);
-    return Material(
-      color: widget.highlighted
-          ? ForumPalette.of(context).soft
-          : ForumPalette.of(context).surface,
-      child: InkWell(
-        onTap: widget.preview ? widget.onOpen : null,
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: horizontal,
-            vertical: widget.depth > 0 ? 14 : 24,
-          ),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: ForumPalette.of(context).line),
+    final replies = _hoverReplies ?? p.lastReplyArr;
+    return MouseRegion(
+      onEnter: (_) => _preview(),
+      onExit: (_) => _leavePreview(),
+      child: Material(
+        color: widget.highlighted
+            ? ForumPalette.of(context).soft
+            : ForumPalette.of(context).surface,
+        child: InkWell(
+          onTap: widget.preview ? widget.onOpen : null,
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontal,
+              vertical: widget.depth > 0 ? 14 : 24,
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        if (widget.boardName.isNotEmpty)
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 5,
-                            ),
-                            color: ForumPalette.of(context).soft,
-                            child: Text(
-                              widget.boardName,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: ForumPalette.of(context).accent,
-                                fontWeight: FontWeight.w700,
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: ForumPalette.of(context).line),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          if (widget.boardName.isNotEmpty)
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
+                              color: ForumPalette.of(context).soft,
+                              child: Text(
+                                widget.boardName,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: ForumPalette.of(context).accent,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
-                          ),
-                        Text(
-                          p.name.isEmpty ? '匿名岛民' : p.name,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          dates.DateUtils.formatTimestamp(p.time),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: ForumPalette.of(context).muted,
-                          ),
-                        ),
-                        if (p.topStatus != 0)
                           Text(
-                            '置顶',
+                            p.name.isEmpty ? '匿名岛民' : p.name,
                             style: TextStyle(
-                              color: ForumPalette.of(context).accent,
-                              fontSize: 11,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        if (p.isSaged)
                           Text(
-                            'SAGE',
+                            dates.DateUtils.formatTimestamp(p.time),
                             style: TextStyle(
+                              fontSize: 10,
                               color: ForumPalette.of(context).muted,
-                              fontSize: 11,
                             ),
                           ),
-                        if (widget.showDeletionStatus)
-                          Container(
-                            key: ValueKey('post-deletion-status-${p.id}'),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: p.isDeleted
-                                  ? Theme.of(context).colorScheme.errorContainer
-                                  : ForumPalette.of(context).soft,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              p.isDeleted ? '已删除' : '未删除',
+                          if (p.topStatus != 0)
+                            Text(
+                              '置顶',
                               style: TextStyle(
+                                color: ForumPalette.of(context).accent,
                                 fontSize: 11,
-                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          if (p.isSaged)
+                            Text(
+                              'SAGE',
+                              style: TextStyle(
+                                color: ForumPalette.of(context).muted,
+                                fontSize: 11,
+                              ),
+                            ),
+                          if (widget.showDeletionStatus)
+                            Container(
+                              key: ValueKey('post-deletion-status-${p.id}'),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
                                 color: p.isDeleted
                                     ? Theme.of(
                                         context,
-                                      ).colorScheme.onErrorContainer
-                                    : ForumPalette.of(context).accent,
+                                      ).colorScheme.errorContainer
+                                    : ForumPalette.of(context).soft,
+                                borderRadius: BorderRadius.circular(4),
                               ),
-                            ),
-                          )
-                        else if (p.isDeleted)
-                          Text(
-                            '已删除',
-                            style: TextStyle(
-                              color: ForumPalette.of(context).muted,
-                              fontSize: 11,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  TextButton(
-                    onPressed: widget.preview
-                        ? widget.onOpen
-                        : () => widget.onReply?.call(p.id),
-                    style: TextButton.styleFrom(
-                      minimumSize: Size(48, 36),
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    child: Text(
-                      'No.${p.id}',
-                      style: TextStyle(fontSize: 11, fontFamily: 'monospace'),
-                    ),
-                  ),
-                ],
-              ),
-              if (p.title.isNotEmpty) ...[
-                SizedBox(height: 10),
-                Text(
-                  p.title,
-                  maxLines: widget.preview ? 2 : null,
-                  overflow: widget.preview ? TextOverflow.ellipsis : null,
-                  style: TextStyle(
-                    fontSize: widget.depth > 0 ? 16 : 20,
-                    height: 1.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-              SizedBox(height: 8),
-              if (widget.preview)
-                Text(
-                  p.value,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.8,
-                    color: ForumPalette.of(context).muted,
-                  ),
-                )
-              else
-                RichPostText(
-                  text: p.value,
-                  onQuote: _quote,
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.85,
-                    color: ForumPalette.of(context).ink,
-                  ),
-                ),
-              if (media.isNotEmpty)
-                Padding(
-                  padding: EdgeInsets.only(top: 12),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: media
-                        .take(widget.preview ? 3 : 5)
-                        .map((m) => _MediaPreview(item: m))
-                        .toList(),
-                  ),
-                ),
-              if (widget.preview) ...[
-                SizedBox(height: 16),
-                Text(
-                  '${p.replyCount} 个回复${p.sageAddCount > 0 ? '     SAGE ${p.sageAddCount}' : ''}',
-                  style: TextStyle(
-                    color: ForumPalette.of(context).muted,
-                    fontSize: 11,
-                  ),
-                ),
-                if (p.lastReplyArr.isNotEmpty)
-                  Padding(
-                    padding: EdgeInsets.only(top: 12),
-                    child: Container(
-                      padding: EdgeInsets.only(left: 12),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          left: BorderSide(
-                            color: ForumPalette.of(context).line,
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: p.lastReplyArr
-                            .take(5)
-                            .map(
-                              (reply) => InkWell(
-                                onTap: () => context.push('/post/${reply.id}'),
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 5),
-                                  child: Text(
-                                    '${reply.name}: ${reply.value}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: ForumPalette.of(context).muted,
-                                    ),
-                                  ),
+                              child: Text(
+                                p.isDeleted ? '已删除' : '未删除',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: p.isDeleted
+                                      ? Theme.of(
+                                          context,
+                                        ).colorScheme.onErrorContainer
+                                      : ForumPalette.of(context).accent,
                                 ),
                               ),
                             )
-                            .toList(),
-                      ),
-                    ),
-                  ),
-              ],
-              ..._quotes.entries.map(
-                (entry) => Container(
-                  margin: EdgeInsets.only(top: 12),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      left: BorderSide(
-                        color: ForumPalette.of(context).accent,
-                        width: 2,
-                      ),
-                    ),
-                  ),
-                  child: FutureBuilder<Post>(
-                    future: entry.value,
-                    builder: (context, snapshot) {
-                      if (snapshot.hasError) {
-                        return Padding(
-                          padding: EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('No.${entry.key}：${snapshot.error}'),
-                              TextButton(
-                                onPressed: () => setState(() {
-                                  _quotes[entry.key] = ref
-                                      .read(forumRepositoryProvider)
-                                      .post(entry.key);
-                                }),
-                                child: Text('重试'),
+                          else if (p.isDeleted)
+                            Text(
+                              '已删除',
+                              style: TextStyle(
+                                color: ForumPalette.of(context).muted,
+                                fontSize: 11,
                               ),
-                            ],
-                          ),
-                        );
-                      }
-                      if (!snapshot.hasData) {
-                        return Padding(
-                          padding: EdgeInsets.all(16),
-                          child: LinearProgressIndicator(),
-                        );
-                      }
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextButton(
-                            onPressed: () => context.push('/post/${entry.key}'),
-                            child: Text('前往 No.${entry.key} 所在串 →'),
-                          ),
-                          ForumPostView(
-                            post: snapshot.data!,
-                            boardName: '',
-                            depth: widget.depth + 1,
-                            onReply: widget.onReply,
-                          ),
+                            ),
                         ],
-                      );
-                    },
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    TextButton(
+                      onPressed: widget.preview
+                          ? widget.onOpen
+                          : () => widget.onReply?.call(p.id),
+                      style: TextButton.styleFrom(
+                        minimumSize: Size(48, 36),
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      child: Text(
+                        'No.${p.id}',
+                        style: TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                      ),
+                    ),
+                  ],
+                ),
+                if (p.title.isNotEmpty) ...[
+                  SizedBox(height: 10),
+                  Text(
+                    widget.preview ? forumPreviewText(p.title) : p.title,
+                    maxLines: widget.preview ? 2 : null,
+                    overflow: widget.preview ? TextOverflow.ellipsis : null,
+                    style: TextStyle(
+                      fontSize: widget.depth > 0 ? 16 : 20,
+                      height: 1.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+                SizedBox(height: 8),
+                if (widget.preview)
+                  Text(
+                    forumPreviewText(p.value),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.8,
+                      color: ForumPalette.of(context).muted,
+                    ),
+                  )
+                else
+                  RichPostText(
+                    text: p.value,
+                    onQuote: _quote,
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.85,
+                      color: ForumPalette.of(context).ink,
+                    ),
+                  ),
+                if (media.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.only(top: 12),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: media
+                          .take(widget.preview ? 3 : 5)
+                          .map((m) => _MediaPreview(item: m))
+                          .toList(),
+                    ),
+                  ),
+                if (widget.preview) ...[
+                  SizedBox(height: 16),
+                  Text(
+                    '${p.replyCount} 个回复${p.sageAddCount > 0 ? '     SAGE ${p.sageAddCount}' : ''}',
+                    style: TextStyle(
+                      color: ForumPalette.of(context).muted,
+                      fontSize: 11,
+                    ),
+                  ),
+                  if (replies.isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(top: 12),
+                      child: Container(
+                        padding: EdgeInsets.only(left: 12),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            left: BorderSide(
+                              color: ForumPalette.of(context).line,
+                              width: 2,
+                            ),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: replies
+                              .take(5)
+                              .map(
+                                (reply) => InkWell(
+                                  onTap: () => context.push(
+                                    p.site.route(
+                                      '/post/${p.site.isIslander ? reply.id : p.id}',
+                                    ),
+                                  ),
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 5),
+                                    child: Text(
+                                      forumPreviewText(
+                                        '${reply.name}: ${reply.value}',
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: ForumPalette.of(context).muted,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                    ),
+                ],
+                ..._quotes.entries.map(
+                  (entry) => Container(
+                    margin: EdgeInsets.only(top: 12),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        left: BorderSide(
+                          color: ForumPalette.of(context).accent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    child: FutureBuilder<Post>(
+                      future: entry.value,
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return Padding(
+                            padding: EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('No.${entry.key}：${snapshot.error}'),
+                                TextButton(
+                                  onPressed: () => setState(() {
+                                    _quotes[entry.key] = ref
+                                        .read(forumRepositoryProvider)
+                                        .post(entry.key);
+                                  }),
+                                  child: Text('重试'),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        if (!snapshot.hasData) {
+                          return Padding(
+                            padding: EdgeInsets.all(16),
+                            child: LinearProgressIndicator(),
+                          );
+                        }
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (!snapshot.data!.parentUnknown)
+                              TextButton(
+                                onPressed: () => context.push(
+                                  _post.site.route(
+                                    '/post/${snapshot.data!.followId == 0 ? entry.key : snapshot.data!.followId}',
+                                  ),
+                                ),
+                                child: Text('前往 No.${entry.key} 所在串 →'),
+                              ),
+                            ForumPostView(
+                              post: snapshot.data!,
+                              boardName: '',
+                              depth: widget.depth + 1,
+                              ancestors: {...widget.ancestors, _post.key},
+                              onReply: widget.onReply,
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                   ),
                 ),
-              ),
-              if (widget.depth == 0 &&
-                  (!widget.preview || (userId > 0 && userId == p.userId))) ...[
-                SizedBox(height: 6),
-                _actions(p, userId),
+                if (widget.depth == 0 &&
+                    (!widget.preview ||
+                        (userId > 0 && userId == p.userId))) ...[
+                  SizedBox(height: 6),
+                  _actions(p, userId),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

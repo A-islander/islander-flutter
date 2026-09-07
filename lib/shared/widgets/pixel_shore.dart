@@ -40,12 +40,10 @@ class _PixelShoreState extends State<PixelShore>
         child: SizedBox(
           height: widget.height,
           width: double.infinity,
-          child: AnimatedBuilder(
-            animation: _controller,
-            builder: (context, _) => CustomPaint(
-              painter: _PixelShorePainter(
-                progress: reduceMotion ? 0.46 : _controller.value,
-              ),
+          child: CustomPaint(
+            painter: _PixelShorePainter(
+              animation: _controller,
+              reduceMotion: reduceMotion,
             ),
           ),
         ),
@@ -64,9 +62,12 @@ class _PixelShoreState extends State<PixelShore>
 }
 
 class _PixelShorePainter extends CustomPainter {
-  const _PixelShorePainter({required this.progress});
+  _PixelShorePainter({required this.animation, required this.reduceMotion})
+    : super(repaint: reduceMotion ? null : animation);
 
-  final double progress;
+  final Animation<double> animation;
+  final bool reduceMotion;
+  double get progress => reduceMotion ? .46 : animation.value;
 
   static const _seaDeep = Color(0xFF168E91);
   static const _seaLight = Color(0xFF9CE1D7);
@@ -235,5 +236,6 @@ class _PixelShorePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _PixelShorePainter oldDelegate) =>
-      oldDelegate.progress != progress;
+      oldDelegate.animation != animation ||
+      oldDelegate.reduceMotion != reduceMotion;
 }

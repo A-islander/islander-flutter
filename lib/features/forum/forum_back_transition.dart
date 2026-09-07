@@ -13,6 +13,9 @@ class ForumBackTransitionsBuilder extends PageTransitionsBuilder {
   );
 
   @override
+  Duration get reverseTransitionDuration => const Duration(milliseconds: 200);
+
+  @override
   Widget buildTransitions<T>(
     PageRoute<T> route,
     BuildContext context,
@@ -44,14 +47,36 @@ class _ForumBackTransition extends StatefulWidget {
 }
 
 class _ForumBackTransitionState extends State<_ForumBackTransition>
-    with WidgetsBindingObserver {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final ValueNotifier<bool> _gestureInProgress;
+  late final AnimationController _cancelController;
   bool _participating = false, _committing = false;
-  double _commitStart = 0;
+  double _commitStart = 0, _cancelStart = 0;
 
   @override
   void initState() {
     super.initState();
+    _cancelController =
+        AnimationController(
+            vsync: this,
+            duration: const Duration(milliseconds: 140),
+          )
+          ..addListener(() {
+            if (!_participating || _committing) return;
+            final remaining =
+                _cancelStart *
+                (1 - Curves.easeOutCubic.transform(_cancelController.value));
+            widget.route.handleUpdateBackGestureProgress(
+              progress: 1 - remaining,
+            );
+          })
+          ..addStatusListener((status) {
+            if (status == AnimationStatus.completed &&
+                _participating &&
+                !_committing) {
+              widget.route.handleCancelBackGesture();
+            }
+          });
     _gestureInProgress = widget.route.navigator!.userGestureInProgressNotifier;
     _gestureInProgress.addListener(_gestureChanged);
     WidgetsBinding.instance.addObserver(this);
@@ -59,6 +84,7 @@ class _ForumBackTransitionState extends State<_ForumBackTransition>
 
   void _gestureChanged() {
     if (!_gestureInProgress.value && _participating && mounted) {
+      _cancelController.stop();
       setState(() {
         _participating = false;
         _committing = false;
@@ -83,7 +109,7 @@ class _ForumBackTransitionState extends State<_ForumBackTransition>
 
   @override
   void handleUpdateBackGestureProgress(PredictiveBackEvent event) {
-    if (!_participating) return;
+    if (!_participating || _cancelController.isAnimating) return;
     // Only gesture progress is used; neither edge nor finger position moves it.
     widget.route.handleUpdateBackGestureProgress(progress: 1 - event.progress);
   }
@@ -91,12 +117,18 @@ class _ForumBackTransitionState extends State<_ForumBackTransition>
   @override
   void handleCancelBackGesture() {
     if (!_participating) return;
-    widget.route.handleCancelBackGesture();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      widget.route.handleUpdateBackGestureProgress(progress: 1);
+      widget.route.handleCancelBackGesture();
+      return;
+    }
+    _cancelStart = (1 - widget.animation.value).clamp(0.0, 1.0);
+    _cancelController.forward(from: 0);
   }
 
   @override
   void handleCommitBackGesture() {
-    if (!_participating) return;
+    if (!_participating || _cancelController.isAnimating) return;
     setState(() {
       // Flutter restarts the route's reverse animation at 1 on commit. Capture
       // the last gesture scale to avoid snapping back to full size first.
@@ -111,6 +143,7 @@ class _ForumBackTransitionState extends State<_ForumBackTransition>
 
   @override
   void dispose() {
+    _cancelController.dispose();
     _gestureInProgress.removeListener(_gestureChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -138,11 +171,10 @@ class _ForumBackTransitionState extends State<_ForumBackTransition>
       // Keep the destination stationary while the outgoing page shrinks.
       if (!_participating) return child!;
       final progress = (1 - widget.animation.value).clamp(0.0, 1.0);
-      final eased = Curves.easeOutCubic.transform(progress);
-      final startScale = 1 - .08 * Curves.easeOutCubic.transform(_commitStart);
+      final startScale = 1 - .08 * _commitStart;
       final scale = _committing
-          ? startScale * (1 - Curves.easeInOutCubic.transform(progress))
-          : 1 - .08 * eased;
+          ? startScale * (1 - Curves.easeOutCubic.transform(progress))
+          : 1 - .08 * progress;
       return IgnorePointer(
         child: Opacity(
           opacity: _committing ? 1 - Curves.easeIn.transform(progress) : 1,

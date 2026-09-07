@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app.dart';
+import 'core/router/app_router.dart';
+import 'features/forum/application/forum_state_store.dart';
 import 'core/network/dio_client.dart';
 import 'core/storage/storage_service.dart';
 import 'features/auth/providers/auth_provider.dart';
@@ -35,6 +37,8 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final storageService = StorageService(prefs);
   await storageService.initialize();
+  AppRouter.initialLocation =
+      await ForumStateStore(storageService).startupRoute() ?? '/plate/0';
 
   runApp(
     ProviderScope(

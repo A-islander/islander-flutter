@@ -1,6 +1,16 @@
 import 'dart:convert';
+import '../../forum/domain/forum_site.dart';
 
 class Post {
+  final ForumSite? source;
+  final String? sourceId;
+  final String? boardKey;
+  final bool parentUnknown;
+  final String authorId;
+  ForumSite get site => source ?? ForumSite.islander;
+  PostKey get key => PostKey(site.instanceKey, sourceId ?? '$id');
+  bool get isRoot => !parentUnknown && followId == 0;
+  String? get parentId => parentUnknown || followId == 0 ? null : '$followId';
   final int id;
   final int followId;
   final int plateId;
@@ -25,6 +35,11 @@ class Post {
 
   const Post({
     required this.id,
+    this.source,
+    this.sourceId,
+    this.boardKey,
+    this.parentUnknown = false,
+    this.authorId = '',
     this.followId = 0,
     this.plateId = 0,
     this.status = 0,
@@ -62,7 +77,11 @@ class Post {
   factory Post.fromJson(Map<String, dynamic> json) {
     List<int> parseIntList(dynamic val) {
       if (val == null) return [];
-      if (val is List) return val.map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0).toList();
+      if (val is List) {
+        return val
+            .map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0)
+            .toList();
+      }
       return [];
     }
 
@@ -74,7 +93,12 @@ class Post {
 
     List<Post> parsePostList(dynamic val) {
       if (val == null) return [];
-      if (val is List) return val.whereType<Map<String, dynamic>>().map(Post.fromJson).toList();
+      if (val is List) {
+        return val
+            .whereType<Map<String, dynamic>>()
+            .map(Post.fromJson)
+            .toList();
+      }
       return [];
     }
 

@@ -43,7 +43,8 @@ class _RichPostTextState extends State<RichPostText> {
   }
 
   static final _urlOrNoRegex = RegExp(
-    r'(http|ftp|https)://[\w\-_]+(\.[\w\-_]+)+([\w\-\.,@?^=%&:/~\+#]*[\w\-\@?^=%&/~\+#])?|No\.[0-9]+',
+    r'https?://[^\s<>]+|(?:>>)?(?:No\.|Po\.)[0-9]+|>>[0-9]+',
+    caseSensitive: false,
   );
 
   @override
@@ -83,8 +84,8 @@ class _RichPostTextState extends State<RichPostText> {
             ),
           ),
         );
-      } else if (matched.startsWith('No.')) {
-        final postId = matched.replaceFirst('No.', '');
+      } else {
+        final postId = RegExp(r'\d+$').firstMatch(matched)![0]!;
         spans.add(
           TextSpan(
             text: '$matched ',

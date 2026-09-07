@@ -3,8 +3,16 @@ class Plate {
   final String name;
   final int status;
   final String value;
+  final String? sourceKey;
+  String get key => sourceKey ?? '$id';
 
-  const Plate({required this.id, required this.name, required this.status, required this.value});
+  const Plate({
+    required this.id,
+    required this.name,
+    required this.status,
+    required this.value,
+    this.sourceKey,
+  });
 
   factory Plate.fromJson(Map<String, dynamic> json) {
     return Plate(
