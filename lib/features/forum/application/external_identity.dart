@@ -128,10 +128,13 @@ class ExternalIdentityNotifier extends StateNotifier<AsyncValue<AuthState>> {
     }
     return AuthState(cookies: current.cookies, activeId: id);
   });
-  Future<void> remove(String id) => _change(
-    (current) => AuthState(
-      cookies: current.cookies.where((e) => e.id != id).toList(),
-      activeId: current.activeId == id ? null : current.activeId,
-    ),
-  );
+  Future<void> remove(String id) async {
+    await _change(
+      (current) => AuthState(
+        cookies: current.cookies.where((e) => e.id != id).toList(),
+        activeId: current.activeId == id ? null : current.activeId,
+      ),
+    );
+    await storage.removeExternalDrafts(site, id);
+  }
 }

@@ -250,8 +250,10 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
   }
 
   Widget _actions(Post post, int userId) {
-    if (!ref.read(forumRepositoryProvider).capabilities.sage &&
-        !ref.read(forumRepositoryProvider).capabilities.manage) {
+    final capabilities = ref.read(forumRepositoryProvider).capabilities;
+    if (!capabilities.sage &&
+        !capabilities.manage &&
+        (widget.preview || widget.onReply == null)) {
       return const SizedBox.shrink();
     }
     final palette = ForumPalette.of(context);
@@ -306,20 +308,22 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
           if (!widget.preview) ...[
             if (widget.onReply != null)
               item('reply', '引用回复', Icons.reply_outlined),
-            item(
-              'sage',
-              'SAGE ${post.sageAddCount}',
-              Icons.arrow_downward_rounded,
-              selected: userId > 0 && post.sageAddId.contains(userId),
-            ),
-            item(
-              'unsage',
-              '反对 SAGE ${post.sageSubCount}',
-              Icons.arrow_upward_rounded,
-              selected: userId > 0 && post.sageSubId.contains(userId),
-            ),
+            if (capabilities.sage)
+              item(
+                'sage',
+                'SAGE ${post.sageAddCount}',
+                Icons.arrow_downward_rounded,
+                selected: userId > 0 && post.sageAddId.contains(userId),
+              ),
+            if (capabilities.sage)
+              item(
+                'unsage',
+                '反对 SAGE ${post.sageSubCount}',
+                Icons.arrow_upward_rounded,
+                selected: userId > 0 && post.sageSubId.contains(userId),
+              ),
           ],
-          if (userId > 0 && userId == post.userId) ...[
+          if (capabilities.manage && userId > 0 && userId == post.userId) ...[
             if (!widget.preview) PopupMenuDivider(),
             item(
               post.isDeleted ? 'recover' : 'delete',

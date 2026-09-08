@@ -662,10 +662,14 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
   }
 
   Future<void> _compose({int? quoteId}) async {
-    if (!_repo.capabilities.publish) return;
-    if (!ref.read(authProvider).isLoggedIn) {
+    if (!_repo.capabilities.canPublish(_isThread)) return;
+    bool loggedIn() => _site.isIslander
+        ? ref.read(authProvider).isLoggedIn
+        : ref.read(externalIdentityProvider(_site)).asData?.value.isLoggedIn ??
+              false;
+    if (!loggedIn()) {
       await _cookie();
-      if (!mounted || !ref.read(authProvider).isLoggedIn) return;
+      if (!mounted || !loggedIn()) return;
     }
     final boards = ref.read(forumBoardsProvider).asData?.value ?? [];
     if (!_isThread && boards.isEmpty) {
@@ -679,8 +683,10 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
     final result = await forumSheet<bool>(
       context,
       ForumComposer(
+        repository: _repo,
         boards: boards,
         boardId: _thread?.plateId ?? widget.boardId,
+        boardKey: _thread?.boardKey ?? widget.boardKey,
         threadId: _isThread ? _thread?.id : null,
         quoteId: quoteId,
       ),
@@ -797,7 +803,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
         preview: !_isThread,
         highlighted: post.id == _highlightId,
         onOpen: () => _open(post),
-        onReply: _repo.capabilities.publish
+        onReply: _repo.capabilities.reply
             ? (id) => _compose(quoteId: id)
             : null,
         onChanged: () => _load(),
@@ -1363,7 +1369,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
                                                             onReply:
                                                                 _repo
                                                                     .capabilities
-                                                                    .publish
+                                                                    .reply
                                                                 ? (id) =>
                                                                       _compose(
                                                                         quoteId:
@@ -1687,7 +1693,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
             ),
             floatingActionButton: ForumFabSlot(
               hidden: _drawerOpen,
-              child: !_repo.capabilities.publish
+              child: !_repo.capabilities.canPublish(_isThread)
                   ? null
                   : FloatingActionButton.extended(
                       heroTag: null,

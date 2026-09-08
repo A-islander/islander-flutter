@@ -279,7 +279,6 @@ void main() {
       BogAdapter(transport: fixture.client()),
     ]) {
       for (final request in [
-        repo.publish(body: 'test', boardId: 1),
         repo.vote(1, true),
         repo.changeVisibility(1, recover: true),
         repo.register(),

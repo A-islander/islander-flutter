@@ -70,8 +70,10 @@ abstract class ForumRepository {
     required String body,
     String title = '',
     required int boardId,
+    String? boardKey,
     int? threadId,
     List<MediaItem> media = const [],
+    List<XFile> files = const [],
     String? expectedToken,
   }) => unsupported('发布');
   Future<Map<String, dynamic>> verifyToken(String token) => unsupported('身份验证');

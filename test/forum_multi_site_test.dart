@@ -154,7 +154,7 @@ void main() {
       final api = fixture();
       final storage = await pumpSites(tester, api);
       expect(find.text('X 岛'), findsOneWidget);
-      expect(find.byKey(const Key('fab-compose')), findsNothing);
+      expect(find.byKey(const Key('fab-compose')), findsOneWidget);
       expect(find.byKey(const ValueKey('post-actions-10')), findsNothing);
       expect(find.text('20 条已加载'), findsOneWidget);
       expect(

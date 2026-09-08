@@ -189,11 +189,11 @@ void main() {
     await pumpForum(tester, ForumFixture(), authenticated: true);
     await openEditor(tester);
     await tester.enterText(find.byKey(const Key('composer-body')), '综合草稿');
-    await tap(tester, find.byType(DropdownButtonFormField<int>));
+    await tap(tester, find.byKey(const ValueKey('composer-board-1-0')));
     await tap(tester, find.text('技术版').last);
     expect(body(tester), '');
     await tester.enterText(find.byKey(const Key('composer-body')), '技术草稿');
-    await tap(tester, find.byType(DropdownButtonFormField<int>));
+    await tap(tester, find.byKey(const ValueKey('composer-board-2-1')));
     await tap(tester, find.text('综合版').last);
     expect(body(tester), '综合草稿');
     await closeEditor(tester);

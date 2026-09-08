@@ -127,6 +127,22 @@ class StorageService {
 
   String draftKey(String cookieId, int boardId, int? threadId) =>
       '$_draftPrefix$cookieId.${threadId == null ? 'board.$boardId' : 'thread.$threadId'}';
+  String externalDraftKey(
+    ForumSite site,
+    String cookieId,
+    String boardKey,
+    int? threadId,
+  ) =>
+      'islander.external-draft.v1.${site.instanceKey}.$cookieId.${threadId == null ? 'board.${Uri.encodeComponent(boardKey)}' : 'thread.$threadId'}';
+
+  Future<void> removeExternalDrafts(ForumSite site, String cookieId) async {
+    await _draftWrites;
+    final prefix = 'islander.external-draft.v1.${site.instanceKey}.$cookieId.';
+    for (final key in _prefs.getKeys().where((k) => k.startsWith(prefix))) {
+      await saveDraft(key, null);
+    }
+  }
+
   Map<String, dynamic>? readDraft(String key) {
     final raw = _prefs.getString(key);
     return raw == null ? null : jsonDecode(raw) as Map<String, dynamic>;

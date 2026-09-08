@@ -115,10 +115,15 @@ class IslanderAdapter extends ForumRepository {
     required String body,
     String title = '',
     required int boardId,
+    String? boardKey,
     int? threadId,
     List<MediaItem> media = const [],
+    List<XFile> files = const [],
     String? expectedToken,
   }) async {
+    if (files.isNotEmpty) {
+      throw const ForumFailure('岛民岛附件须先上传');
+    }
     if (body.trim().isEmpty || utf8.encode(body).length > 8192) {
       throw const ForumFailure('正文不能为空，且不能超过 8192 字节（约 2700 个汉字）');
     }

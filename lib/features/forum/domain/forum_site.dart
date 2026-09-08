@@ -89,6 +89,7 @@ class PostKey {
 class ForumCapabilities {
   const ForumCapabilities({
     this.publish = false,
+    this.reply = false,
     this.mine = false,
     this.sage = false,
     this.manage = false,
@@ -96,9 +97,11 @@ class ForumCapabilities {
     this.register = false,
     this.locate = false,
   });
-  final bool publish, mine, sage, manage, verify, register, locate;
+  final bool publish, reply, mine, sage, manage, verify, register, locate;
+  bool canPublish(bool isReply) => isReply ? reply : publish;
   static const islander = ForumCapabilities(
     publish: true,
+    reply: true,
     mine: true,
     sage: true,
     manage: true,

@@ -125,7 +125,7 @@ class _ExternalCookieSheetState extends ConsumerState<ExternalCookieSheet> {
                                 builder: (context) => AlertDialog(
                                   title: Text('移除 ${cookie.displayName}？'),
                                   content: Text(
-                                    '仅从本机移除 ${widget.site.name} 的这份饼干，不删除服务器账号或帖子。请确认已备份。',
+                                    '仅从本机移除 ${widget.site.name} 的这份饼干及其本机草稿，不删除服务器账号、帖子或已上传图片。请确认已备份。',
                                   ),
                                   actions: [
                                     TextButton(

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../../../plate/models/plate_model.dart';
 import '../../../plate/models/post_model.dart';
 import '../../forum_repository.dart';
@@ -21,7 +22,8 @@ class XAdapter extends ExternalAdapter {
   }
 
   @override
-  ForumCapabilities get capabilities => const ForumCapabilities(verify: true);
+  ForumCapabilities get capabilities =>
+      const ForumCapabilities(verify: true, publish: !kIsWeb, reply: !kIsWeb);
 
   Future<dynamic> _json(String path, [Map<String, dynamic>? query]) async {
     final data = await get(path, query: query);
