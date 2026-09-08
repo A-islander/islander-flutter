@@ -4,7 +4,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../main.dart';
-import '../../shared/widgets/pixel_shore.dart';
 import '../plate/models/plate_model.dart';
 import '../plate/models/post_model.dart';
 import 'cookie_sheet.dart';
@@ -19,6 +18,7 @@ import 'application/external_identity.dart';
 import 'external_cookie_sheet.dart';
 import 'application/forum_state_store.dart';
 import 'forum_history_sheet.dart';
+import 'forum_motion.dart';
 
 final forumBoardsProvider = FutureProvider<List<Plate>>(
   (ref) => ref.watch(forumRepositoryProvider).plates(),
@@ -48,6 +48,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
   final _search = TextEditingController();
   double _drawerSwipeDistance = 0;
   bool _drawerSwipeTriggered = false;
+  bool _drawerOpen = false;
   final _targetKey = GlobalKey();
   final _rootKey = GlobalKey();
   late final ForumStateStore _stateStore;
@@ -789,6 +790,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
             ? _targetKey
             : ValueKey('post-${post.id}'),
         post: post,
+        threadRoot: _thread,
         boardName: post.site.id == 'bog'
             ? post.boardKey ?? 'BOG'
             : boardName(post.plateId),
@@ -836,6 +838,8 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
               : '导入 / 领取';
           final scaffold = Scaffold(
             key: _scaffold,
+            backgroundColor: Colors.transparent,
+            onDrawerChanged: (open) => setState(() => _drawerOpen = open),
             appBar: AppBar(
               toolbarHeight: 64,
               titleSpacing: 0,
@@ -1056,7 +1060,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
                       child: Container(
                         constraints: BoxConstraints(maxWidth: 1200),
                         decoration: BoxDecoration(
-                          color: ForumPalette.of(context).surface,
+                          color: Colors.transparent,
                           border: Border.symmetric(
                             vertical: BorderSide(
                               color: ForumPalette.of(context).line,
@@ -1074,548 +1078,597 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             if (wide) ...[
-                              SizedBox(width: 240, child: sidebar()),
+                              ColoredBox(
+                                color: ForumPalette.of(context).surface,
+                                child: SizedBox(width: 240, child: sidebar()),
+                              ),
                               VerticalDivider(width: 1),
                             ],
                             Expanded(
-                              child: Column(
-                                children: [
-                                  if (!wide && _showSearch)
-                                    Padding(
-                                      padding: EdgeInsets.all(16),
-                                      child: TextField(
-                                        controller: _search,
-                                        onChanged: (v) =>
-                                            setState(() => _query = v.trim()),
-                                        onSubmitted: _searchSubmit,
-                                        decoration: InputDecoration(
-                                          labelText: '筛选已加载内容 / No.编号跳转',
-                                          prefixIcon: Icon(Icons.search),
+                              child: ForumReadingTransition(
+                                child: ColoredBox(
+                                  color: ForumPalette.of(context).surface,
+                                  child: Column(
+                                    children: [
+                                      if (!wide && _showSearch)
+                                        Padding(
+                                          padding: EdgeInsets.all(16),
+                                          child: TextField(
+                                            controller: _search,
+                                            onChanged: (v) => setState(
+                                              () => _query = v.trim(),
+                                            ),
+                                            onSubmitted: _searchSubmit,
+                                            decoration: InputDecoration(
+                                              labelText: '筛选已加载内容 / No.编号跳转',
+                                              prefixIcon: Icon(Icons.search),
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                    ),
-                                  Expanded(
-                                    child: NotificationListener<ScrollNotification>(
-                                      onNotification: _onScroll,
-                                      child: RefreshIndicator(
-                                        key: Key('forum-refresh'),
-                                        notificationPredicate: _canRefresh,
-                                        onRefresh: () => _hasPrevious
-                                            ? _loadPrevious()
-                                            : _load(),
-                                        child: CustomScrollView(
-                                          key: Key('forum-scroll'),
-                                          controller: _scroll,
-                                          physics:
-                                              AlwaysScrollableScrollPhysics(),
-                                          slivers: [
-                                            SliverToBoxAdapter(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.stretch,
-                                                children: [
-                                                  Padding(
-                                                    padding:
-                                                        EdgeInsets.fromLTRB(
-                                                          horizontal,
-                                                          _isThread ? 20 : 38,
-                                                          horizontal,
-                                                          _isThread ? 12 : 32,
-                                                        ),
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        if (_isThread &&
-                                                            !compact)
-                                                          TextButton.icon(
-                                                            onPressed: () {
-                                                              if (context
-                                                                  .canPop()) {
-                                                                context.pop();
-                                                              } else {
-                                                                _navigate(
-                                                                  '/plate/${Uri.encodeComponent(_thread?.boardKey ?? '${_thread?.plateId ?? 0}')}',
-                                                                );
-                                                              }
-                                                            },
-                                                            icon: Icon(
-                                                              Icons.arrow_back,
-                                                              size: 16,
+                                      Expanded(
+                                        child: NotificationListener<ScrollNotification>(
+                                          onNotification: _onScroll,
+                                          child: RefreshIndicator(
+                                            key: Key('forum-refresh'),
+                                            notificationPredicate: _canRefresh,
+                                            onRefresh: () => _hasPrevious
+                                                ? _loadPrevious()
+                                                : _load(),
+                                            child: CustomScrollView(
+                                              key: Key('forum-scroll'),
+                                              controller: _scroll,
+                                              physics:
+                                                  AlwaysScrollableScrollPhysics(),
+                                              slivers: [
+                                                SliverToBoxAdapter(
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .stretch,
+                                                    children: [
+                                                      Padding(
+                                                        padding:
+                                                            EdgeInsets.fromLTRB(
+                                                              horizontal,
+                                                              _isThread
+                                                                  ? 20
+                                                                  : 38,
+                                                              horizontal,
+                                                              _isThread
+                                                                  ? 12
+                                                                  : 32,
                                                             ),
-                                                            label: Text('返回列表'),
-                                                          ),
-                                                        Text(
-                                                          eyebrow,
-                                                          style: TextStyle(
-                                                            color:
-                                                                ForumPalette.of(
-                                                                  context,
-                                                                ).accent,
-                                                            fontSize: 10,
-                                                            fontWeight:
-                                                                FontWeight.w700,
-                                                          ),
-                                                        ),
-                                                        SizedBox(height: 14),
-                                                        Row(
+                                                        child: Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
                                                           children: [
-                                                            Expanded(
-                                                              child: Text(
-                                                                title,
-                                                                style: TextStyle(
-                                                                  fontSize:
-                                                                      compact
-                                                                      ? 31
-                                                                      : 38,
-                                                                  height: 1.1,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w900,
+                                                            if (_isThread &&
+                                                                !compact)
+                                                              TextButton.icon(
+                                                                onPressed: () {
+                                                                  if (context
+                                                                      .canPop()) {
+                                                                    context
+                                                                        .pop();
+                                                                  } else {
+                                                                    _navigate(
+                                                                      '/plate/${Uri.encodeComponent(_thread?.boardKey ?? '${_thread?.plateId ?? 0}')}',
+                                                                    );
+                                                                  }
+                                                                },
+                                                                icon: Icon(
+                                                                  Icons
+                                                                      .arrow_back,
+                                                                  size: 16,
+                                                                ),
+                                                                label: Text(
+                                                                  '返回列表',
                                                                 ),
                                                               ),
+                                                            Text(
+                                                              eyebrow,
+                                                              style: TextStyle(
+                                                                color:
+                                                                    ForumPalette.of(
+                                                                      context,
+                                                                    ).accent,
+                                                                fontSize: 10,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                              ),
                                                             ),
-                                                            if (wide)
-                                                              IconButton(
-                                                                onPressed:
-                                                                    _loading
-                                                                    ? null
-                                                                    : () =>
-                                                                          _load(),
-                                                                tooltip: '刷新',
-                                                                icon: Icon(
-                                                                  Icons.refresh,
+                                                            SizedBox(
+                                                              height: 14,
+                                                            ),
+                                                            Row(
+                                                              children: [
+                                                                Expanded(
+                                                                  child: Text(
+                                                                    title,
+                                                                    style: TextStyle(
+                                                                      fontSize:
+                                                                          compact
+                                                                          ? 31
+                                                                          : 38,
+                                                                      height:
+                                                                          1.1,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w900,
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                                if (wide)
+                                                                  IconButton(
+                                                                    onPressed:
+                                                                        _loading
+                                                                        ? null
+                                                                        : () =>
+                                                                              _load(),
+                                                                    tooltip:
+                                                                        '刷新',
+                                                                    icon: Icon(
+                                                                      Icons
+                                                                          .refresh,
+                                                                      color: ForumPalette.of(
+                                                                        context,
+                                                                      ).muted,
+                                                                    ),
+                                                                  ),
+                                                              ],
+                                                            ),
+                                                            if (!_isThread) ...[
+                                                              SizedBox(
+                                                                height: 12,
+                                                              ),
+                                                              Text(
+                                                                description,
+                                                                style: TextStyle(
+                                                                  color:
+                                                                      ForumPalette.of(
+                                                                        context,
+                                                                      ).muted,
+                                                                  height: 1.7,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      if (!_isThread &&
+                                                          !_isMine)
+                                                        Container(
+                                                          padding:
+                                                              EdgeInsets.symmetric(
+                                                                horizontal:
+                                                                    horizontal,
+                                                              ),
+                                                          decoration: BoxDecoration(
+                                                            border: Border(
+                                                              bottom: BorderSide(
+                                                                color:
+                                                                    ForumPalette.of(
+                                                                      context,
+                                                                    ).line,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          child: Row(
+                                                            children: [
+                                                              _SortTab(
+                                                                label:
+                                                                    widget.kind ==
+                                                                        'sage'
+                                                                    ? '默认顺序'
+                                                                    : '最近回复',
+                                                                selected:
+                                                                    !_newest,
+                                                                onTap: () =>
+                                                                    setState(
+                                                                      () => _newest =
+                                                                          false,
+                                                                    ),
+                                                              ),
+                                                              SizedBox(
+                                                                width: 20,
+                                                              ),
+                                                              _SortTab(
+                                                                label: '页内最新发布',
+                                                                selected:
+                                                                    _newest,
+                                                                onTap: () =>
+                                                                    setState(
+                                                                      () => _newest =
+                                                                          true,
+                                                                    ),
+                                                              ),
+                                                              Spacer(),
+                                                              Text(
+                                                                _count < 0
+                                                                    ? '${_posts.length} 条已加载'
+                                                                    : '$_count 条',
+                                                                style: TextStyle(
+                                                                  fontSize: 10,
                                                                   color:
                                                                       ForumPalette.of(
                                                                         context,
                                                                       ).muted,
                                                                 ),
                                                               ),
-                                                          ],
+                                                            ],
+                                                          ),
                                                         ),
-                                                        if (!_isThread) ...[
-                                                          SizedBox(height: 12),
-                                                          Text(
-                                                            description,
-                                                            style: TextStyle(
-                                                              color:
-                                                                  ForumPalette.of(
-                                                                    context,
-                                                                  ).muted,
-                                                              height: 1.7,
+                                                      if (_loading)
+                                                        Padding(
+                                                          padding:
+                                                              EdgeInsets.symmetric(
+                                                                vertical: 48,
+                                                              ),
+                                                          child: Center(
+                                                            child:
+                                                                CircularProgressIndicator(),
+                                                          ),
+                                                        )
+                                                      else if (_error != null)
+                                                        _Message(
+                                                          text: _error!,
+                                                          action: '重试',
+                                                          onTap: () => _load(
+                                                            resolve:
+                                                                _thread == null,
+                                                          ),
+                                                        )
+                                                      else if (_isMine &&
+                                                          !auth.isLoggedIn)
+                                                        _Message(
+                                                          text:
+                                                              '导入饼干后查看自己的发串与回复',
+                                                          action: '导入 / 领取饼干',
+                                                          onTap: _cookie,
+                                                        )
+                                                      else ...[
+                                                        if (_notice != null)
+                                                          Padding(
+                                                            padding:
+                                                                EdgeInsets.all(
+                                                                  horizontal,
+                                                                ),
+                                                            child: Text(
+                                                              _notice!,
+                                                              style: TextStyle(
+                                                                color:
+                                                                    ForumPalette.of(
+                                                                      context,
+                                                                    ).muted,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        if (_isThread &&
+                                                            _thread !=
+                                                                null) ...[
+                                                          ForumPostView(
+                                                            key: _rootKey,
+                                                            post: _thread!,
+                                                            boardName:
+                                                                _site.id ==
+                                                                    'bog'
+                                                                ? _thread!.boardKey ??
+                                                                      'BOG'
+                                                                : boardName(
+                                                                    _thread!
+                                                                        .plateId,
+                                                                  ),
+                                                            onReply:
+                                                                _repo
+                                                                    .capabilities
+                                                                    .publish
+                                                                ? (id) =>
+                                                                      _compose(
+                                                                        quoteId:
+                                                                            id,
+                                                                      )
+                                                                : null,
+                                                            onChanged: () =>
+                                                                _load(),
+                                                          ),
+                                                          Padding(
+                                                            padding:
+                                                                EdgeInsets.fromLTRB(
+                                                                  horizontal,
+                                                                  24,
+                                                                  horizontal,
+                                                                  12,
+                                                                ),
+                                                            child: Row(
+                                                              children: [
+                                                                Expanded(
+                                                                  child: Text(
+                                                                    _count < 0
+                                                                        ? '回复 · 第 $_pageRange 页'
+                                                                        : '${(_count - 1).clamp(0, 1000000)} 个回复 · 第 $_pageRange 页',
+                                                                    style: TextStyle(
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w700,
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                                if (_totalPages !=
+                                                                    null)
+                                                                  TextButton(
+                                                                    onPressed: () =>
+                                                                        _load(
+                                                                          last:
+                                                                              true,
+                                                                        ),
+                                                                    child: Text(
+                                                                      '最新回复 ↓',
+                                                                    ),
+                                                                  ),
+                                                              ],
                                                             ),
                                                           ),
                                                         ],
+                                                        if (visible.isEmpty)
+                                                          _Message(
+                                                            text:
+                                                                _query
+                                                                    .isNotEmpty
+                                                                ? '已加载内容中没有匹配项'
+                                                                : _isThread
+                                                                ? '这一页还没有回复'
+                                                                : '这里暂时没有内容',
+                                                            action:
+                                                                _query
+                                                                    .isNotEmpty
+                                                                ? '清除筛选'
+                                                                : '刷新',
+                                                            onTap: () {
+                                                              if (_query
+                                                                  .isNotEmpty) {
+                                                                _search.clear();
+                                                                setState(
+                                                                  () => _query =
+                                                                      '',
+                                                                );
+                                                              } else {
+                                                                _load();
+                                                              }
+                                                            },
+                                                          ),
+                                                      ],
+                                                    ],
+                                                  ),
+                                                ),
+                                                if (!_loading &&
+                                                    _error == null &&
+                                                    !(_isMine &&
+                                                        !auth.isLoggedIn)) ...[
+                                                  PrependSliver(
+                                                    key: ValueKey(
+                                                      'prepend-$_prependPage',
+                                                    ),
+                                                    compensate:
+                                                        _pendingPrependPage !=
+                                                        null,
+                                                    onAdjusted: () =>
+                                                        _pendingPrependPage =
+                                                            null,
+                                                    replacedExtent:
+                                                        _previousControlExtent,
+                                                    sliver: SliverMainAxisGroup(
+                                                      slivers: [
+                                                        if (_count != 0 &&
+                                                            (_loadingPrevious ||
+                                                                _previousError !=
+                                                                    null ||
+                                                                _hasPrevious))
+                                                          SliverToBoxAdapter(
+                                                            child: SizedBox(
+                                                              key: Key(
+                                                                'previous-page-control',
+                                                              ),
+                                                              height:
+                                                                  _previousControlExtent,
+                                                              child: Center(
+                                                                child:
+                                                                    _loadingPrevious
+                                                                    ? SizedBox(
+                                                                        key: Key(
+                                                                          'load-previous-progress',
+                                                                        ),
+                                                                        width:
+                                                                            20,
+                                                                        height:
+                                                                            20,
+                                                                        child: CircularProgressIndicator(
+                                                                          strokeWidth:
+                                                                              2,
+                                                                        ),
+                                                                      )
+                                                                    : _previousError !=
+                                                                          null
+                                                                    ? TextButton(
+                                                                        key: Key(
+                                                                          'load-previous-retry',
+                                                                        ),
+                                                                        onPressed:
+                                                                            _loadPrevious,
+                                                                        child: Text(
+                                                                          '上一页加载失败，点击重试',
+                                                                        ),
+                                                                      )
+                                                                    : TextButton(
+                                                                        key: Key(
+                                                                          'load-previous-button',
+                                                                        ),
+                                                                        onPressed:
+                                                                            _loadPrevious,
+                                                                        child: Text(
+                                                                          '继续下拉，或点击加载上一页 ↑',
+                                                                        ),
+                                                                      ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        if (eagerPosts
+                                                            .isNotEmpty)
+                                                          SliverToBoxAdapter(
+                                                            child: Column(
+                                                              children:
+                                                                  eagerPosts
+                                                                      .map(
+                                                                        postView,
+                                                                      )
+                                                                      .toList(),
+                                                            ),
+                                                          ),
                                                       ],
                                                     ),
                                                   ),
-                                                  if (!_isThread && !_isMine)
-                                                    Container(
-                                                      padding:
-                                                          EdgeInsets.symmetric(
-                                                            horizontal:
-                                                                horizontal,
-                                                          ),
-                                                      decoration: BoxDecoration(
-                                                        border: Border(
-                                                          bottom: BorderSide(
-                                                            color:
-                                                                ForumPalette.of(
-                                                                  context,
-                                                                ).line,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                      child: Row(
-                                                        children: [
-                                                          _SortTab(
-                                                            label:
-                                                                widget.kind ==
-                                                                    'sage'
-                                                                ? '默认顺序'
-                                                                : '最近回复',
-                                                            selected: !_newest,
-                                                            onTap: () =>
-                                                                setState(
-                                                                  () =>
-                                                                      _newest =
-                                                                          false,
-                                                                ),
-                                                          ),
-                                                          SizedBox(width: 20),
-                                                          _SortTab(
-                                                            label: '页内最新发布',
-                                                            selected: _newest,
-                                                            onTap: () =>
-                                                                setState(
-                                                                  () =>
-                                                                      _newest =
-                                                                          true,
-                                                                ),
-                                                          ),
-                                                          Spacer(),
-                                                          Text(
-                                                            _count < 0
-                                                                ? '${_posts.length} 条已加载'
-                                                                : '$_count 条',
-                                                            style: TextStyle(
-                                                              fontSize: 10,
-                                                              color:
-                                                                  ForumPalette.of(
-                                                                    context,
-                                                                  ).muted,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
+                                                  SliverList.builder(
+                                                    key: ValueKey(
+                                                      'forum-post-list',
                                                     ),
-                                                  if (_loading)
-                                                    Padding(
-                                                      padding:
-                                                          EdgeInsets.symmetric(
-                                                            vertical: 48,
-                                                          ),
-                                                      child: Center(
-                                                        child:
-                                                            CircularProgressIndicator(),
-                                                      ),
-                                                    )
-                                                  else if (_error != null)
-                                                    _Message(
-                                                      text: _error!,
-                                                      action: '重试',
-                                                      onTap: () => _load(
-                                                        resolve:
-                                                            _thread == null,
-                                                      ),
-                                                    )
-                                                  else if (_isMine &&
-                                                      !auth.isLoggedIn)
-                                                    _Message(
-                                                      text: '导入饼干后查看自己的发串与回复',
-                                                      action: '导入 / 领取饼干',
-                                                      onTap: _cookie,
-                                                    )
-                                                  else ...[
-                                                    if (_notice != null)
-                                                      Padding(
-                                                        padding: EdgeInsets.all(
-                                                          horizontal,
-                                                        ),
-                                                        child: Text(
-                                                          _notice!,
-                                                          style: TextStyle(
-                                                            color:
-                                                                ForumPalette.of(
-                                                                  context,
-                                                                ).muted,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    if (_isThread &&
-                                                        _thread != null) ...[
-                                                      ForumPostView(
-                                                        key: _rootKey,
-                                                        post: _thread!,
-                                                        boardName:
-                                                            _site.id == 'bog'
-                                                            ? _thread!.boardKey ??
-                                                                  'BOG'
-                                                            : boardName(
-                                                                _thread!
-                                                                    .plateId,
-                                                              ),
-                                                        onReply:
-                                                            _repo
-                                                                .capabilities
-                                                                .publish
-                                                            ? (id) => _compose(
-                                                                quoteId: id,
-                                                              )
-                                                            : null,
-                                                        onChanged: () =>
-                                                            _load(),
-                                                      ),
-                                                      Padding(
+                                                    addRepaintBoundaries: false,
+                                                    findChildIndexCallback:
+                                                        (key) =>
+                                                            lazyIndices[key],
+                                                    itemCount: lazyPosts.length,
+                                                    itemBuilder:
+                                                        (context, index) =>
+                                                            postView(
+                                                              lazyPosts[index],
+                                                            ),
+                                                  ),
+                                                  if (_count != 0)
+                                                    SliverToBoxAdapter(
+                                                      child: Padding(
                                                         padding:
                                                             EdgeInsets.fromLTRB(
                                                               horizontal,
                                                               24,
                                                               horizontal,
-                                                              12,
+                                                              16,
                                                             ),
-                                                        child: Row(
-                                                          children: [
-                                                            Expanded(
-                                                              child: Text(
-                                                                _count < 0
-                                                                    ? '回复 · 第 $_pageRange 页'
-                                                                    : '${(_count - 1).clamp(0, 1000000)} 个回复 · 第 $_pageRange 页',
-                                                                style: TextStyle(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w700,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                            if (_totalPages !=
-                                                                null)
-                                                              TextButton(
-                                                                onPressed: () =>
-                                                                    _load(
-                                                                      last:
-                                                                          true,
-                                                                    ),
-                                                                child: Text(
-                                                                  '最新回复 ↓',
-                                                                ),
-                                                              ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ],
-                                                    if (visible.isEmpty)
-                                                      _Message(
-                                                        text: _query.isNotEmpty
-                                                            ? '已加载内容中没有匹配项'
-                                                            : _isThread
-                                                            ? '这一页还没有回复'
-                                                            : '这里暂时没有内容',
-                                                        action:
-                                                            _query.isNotEmpty
-                                                            ? '清除筛选'
-                                                            : '刷新',
-                                                        onTap: () {
-                                                          if (_query
-                                                              .isNotEmpty) {
-                                                            _search.clear();
-                                                            setState(
-                                                              () => _query = '',
-                                                            );
-                                                          } else {
-                                                            _load();
-                                                          }
-                                                        },
-                                                      ),
-                                                  ],
-                                                ],
-                                              ),
-                                            ),
-                                            if (!_loading &&
-                                                _error == null &&
-                                                !(_isMine &&
-                                                    !auth.isLoggedIn)) ...[
-                                              PrependSliver(
-                                                key: ValueKey(
-                                                  'prepend-$_prependPage',
-                                                ),
-                                                compensate:
-                                                    _pendingPrependPage != null,
-                                                onAdjusted: () =>
-                                                    _pendingPrependPage = null,
-                                                replacedExtent:
-                                                    _previousControlExtent,
-                                                sliver: SliverMainAxisGroup(
-                                                  slivers: [
-                                                    if (_count != 0 &&
-                                                        (_loadingPrevious ||
-                                                            _previousError !=
-                                                                null ||
-                                                            _hasPrevious))
-                                                      SliverToBoxAdapter(
-                                                        child: SizedBox(
-                                                          key: Key(
-                                                            'previous-page-control',
-                                                          ),
-                                                          height:
-                                                              _previousControlExtent,
-                                                          child: Center(
-                                                            child:
-                                                                _loadingPrevious
-                                                                ? SizedBox(
-                                                                    key: Key(
-                                                                      'load-previous-progress',
-                                                                    ),
-                                                                    width: 20,
-                                                                    height: 20,
-                                                                    child: CircularProgressIndicator(
-                                                                      strokeWidth:
-                                                                          2,
-                                                                    ),
-                                                                  )
-                                                                : _previousError !=
-                                                                      null
-                                                                ? TextButton(
-                                                                    key: Key(
-                                                                      'load-previous-retry',
-                                                                    ),
-                                                                    onPressed:
-                                                                        _loadPrevious,
-                                                                    child: Text(
-                                                                      '上一页加载失败，点击重试',
-                                                                    ),
-                                                                  )
-                                                                : TextButton(
-                                                                    key: Key(
-                                                                      'load-previous-button',
-                                                                    ),
-                                                                    onPressed:
-                                                                        _loadPrevious,
-                                                                    child: Text(
-                                                                      '继续下拉，或点击加载上一页 ↑',
-                                                                    ),
-                                                                  ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    if (eagerPosts.isNotEmpty)
-                                                      SliverToBoxAdapter(
                                                         child: Column(
-                                                          children: eagerPosts
-                                                              .map(postView)
-                                                              .toList(),
-                                                        ),
-                                                      ),
-                                                  ],
-                                                ),
-                                              ),
-                                              SliverList.builder(
-                                                key: ValueKey(
-                                                  'forum-post-list',
-                                                ),
-                                                addRepaintBoundaries: false,
-                                                findChildIndexCallback: (key) =>
-                                                    lazyIndices[key],
-                                                itemCount: lazyPosts.length,
-                                                itemBuilder: (context, index) =>
-                                                    postView(lazyPosts[index]),
-                                              ),
-                                              if (_count != 0)
-                                                SliverToBoxAdapter(
-                                                  child: Padding(
-                                                    padding:
-                                                        EdgeInsets.fromLTRB(
-                                                          horizontal,
-                                                          24,
-                                                          horizontal,
-                                                          16,
-                                                        ),
-                                                    child: Column(
-                                                      children: [
-                                                        if (_loadingMore)
-                                                          Padding(
-                                                            key: Key(
-                                                              'load-more-progress',
-                                                            ),
-                                                            padding:
-                                                                EdgeInsets.all(
-                                                                  12,
+                                                          children: [
+                                                            if (_loadingMore)
+                                                              Padding(
+                                                                key: Key(
+                                                                  'load-more-progress',
                                                                 ),
-                                                            child: SizedBox(
-                                                              width: 20,
-                                                              height: 20,
-                                                              child:
-                                                                  CircularProgressIndicator(
+                                                                padding:
+                                                                    EdgeInsets.all(
+                                                                      12,
+                                                                    ),
+                                                                child: SizedBox(
+                                                                  width: 20,
+                                                                  height: 20,
+                                                                  child: CircularProgressIndicator(
                                                                     strokeWidth:
                                                                         2,
                                                                   ),
-                                                            ),
-                                                          )
-                                                        else if (_moreError !=
-                                                            null) ...[
-                                                          Text(
-                                                            _moreError!,
-                                                            style: TextStyle(
-                                                              color:
-                                                                  ForumPalette.of(
-                                                                    context,
-                                                                  ).muted,
-                                                            ),
-                                                          ),
-                                                          TextButton.icon(
-                                                            key: Key(
-                                                              'load-more-retry',
-                                                            ),
-                                                            onPressed:
-                                                                _loadMore,
-                                                            icon: Icon(
-                                                              Icons.refresh,
-                                                              size: 16,
-                                                            ),
-                                                            label: Text(
-                                                              '重试加载下一页',
-                                                            ),
-                                                          ),
-                                                        ] else if (_hasMore)
-                                                          TextButton(
-                                                            key: Key(
-                                                              'load-more-button',
-                                                            ),
-                                                            onPressed:
-                                                                _loadMore,
-                                                            child: Text(
-                                                              '继续上滑，或点击加载更多 ↓',
-                                                            ),
-                                                          )
-                                                        else
-                                                          TextButton.icon(
-                                                            key: const Key(
-                                                              'end-refresh',
-                                                            ),
-                                                            onPressed: () {
-                                                              if (!_loading) {
-                                                                _load();
-                                                              }
-                                                            },
-                                                            icon: const Icon(
-                                                              Icons.refresh,
-                                                              size: 18,
-                                                            ),
-                                                            style: TextButton.styleFrom(
-                                                              minimumSize:
-                                                                  const Size(
-                                                                    48,
-                                                                    48,
+                                                                ),
+                                                              )
+                                                            else if (_moreError !=
+                                                                null) ...[
+                                                              Text(
+                                                                _moreError!,
+                                                                style: TextStyle(
+                                                                  color:
+                                                                      ForumPalette.of(
+                                                                        context,
+                                                                      ).muted,
+                                                                ),
+                                                              ),
+                                                              TextButton.icon(
+                                                                key: Key(
+                                                                  'load-more-retry',
+                                                                ),
+                                                                onPressed:
+                                                                    _loadMore,
+                                                                icon: Icon(
+                                                                  Icons.refresh,
+                                                                  size: 16,
+                                                                ),
+                                                                label: Text(
+                                                                  '重试加载下一页',
+                                                                ),
+                                                              ),
+                                                            ] else if (_hasMore)
+                                                              TextButton(
+                                                                key: Key(
+                                                                  'load-more-button',
+                                                                ),
+                                                                onPressed:
+                                                                    _loadMore,
+                                                                child: Text(
+                                                                  '继续上滑，或点击加载更多 ↓',
+                                                                ),
+                                                              )
+                                                            else
+                                                              TextButton.icon(
+                                                                key: const Key(
+                                                                  'end-refresh',
+                                                                ),
+                                                                onPressed: () {
+                                                                  if (!_loading) {
+                                                                    _load();
+                                                                  }
+                                                                },
+                                                                icon: const Icon(
+                                                                  Icons.refresh,
+                                                                  size: 18,
+                                                                ),
+                                                                style: TextButton.styleFrom(
+                                                                  minimumSize:
+                                                                      const Size(
+                                                                        48,
+                                                                        48,
+                                                                      ),
+                                                                  foregroundColor:
+                                                                      ForumPalette.of(
+                                                                        context,
+                                                                      ).accent,
+                                                                ),
+                                                                label: const Text(
+                                                                  '已经到底了，点击刷新',
+                                                                  key: Key(
+                                                                    'load-more-end',
                                                                   ),
-                                                              foregroundColor:
-                                                                  ForumPalette.of(
-                                                                    context,
-                                                                  ).accent,
-                                                            ),
-                                                            label: const Text(
-                                                              '已经到底了，点击刷新',
-                                                              key: Key(
-                                                                'load-more-end',
+                                                                ),
+                                                              ),
+                                                            Text(
+                                                              '已加载第 $_pageRange 页${_totalPages == null ? '' : ' · 共 $_pages 页'}',
+                                                              style: TextStyle(
+                                                                fontSize: 12,
+                                                                color:
+                                                                    ForumPalette.of(
+                                                                      context,
+                                                                    ).muted,
                                                               ),
                                                             ),
-                                                          ),
-                                                        Text(
-                                                          '已加载第 $_pageRange 页${_totalPages == null ? '' : ' · 共 $_pages 页'}',
-                                                          style: TextStyle(
-                                                            fontSize: 12,
-                                                            color:
-                                                                ForumPalette.of(
-                                                                  context,
-                                                                ).muted,
-                                                          ),
+                                                          ],
                                                         ),
-                                                      ],
+                                                      ),
                                                     ),
+                                                ],
+                                                SliverToBoxAdapter(
+                                                  child: SizedBox(
+                                                    height: shoreHeight + 60,
                                                   ),
                                                 ),
-                                            ],
-                                            SliverToBoxAdapter(
-                                              child: SizedBox(
-                                                height: shoreHeight + 60,
-                                              ),
+                                              ],
                                             ),
-                                          ],
+                                          ),
                                         ),
                                       ),
-                                    ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
                             ),
                           ],
@@ -1627,28 +1680,32 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    child: PixelShore(height: shoreHeight),
+                    child: ForumCurrentShore(height: shoreHeight),
                   ),
                 ],
               ),
             ),
-            floatingActionButton: !_repo.capabilities.publish
-                ? null
-                : FloatingActionButton.extended(
-                    key: Key('fab-compose'),
-                    onPressed: _isThread && (_loading || _thread == null)
-                        ? null
-                        : () => _compose(),
-                    backgroundColor: ForumColors.accent,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(),
-                    elevation: 8,
-                    icon: Icon(Icons.add, size: 20),
-                    label: Text(
-                      _isThread ? '回复' : '发新串',
-                      style: TextStyle(fontWeight: FontWeight.w800),
+            floatingActionButton: ForumFabSlot(
+              hidden: _drawerOpen,
+              child: !_repo.capabilities.publish
+                  ? null
+                  : FloatingActionButton.extended(
+                      heroTag: null,
+                      key: Key('fab-compose'),
+                      onPressed: _isThread && (_loading || _thread == null)
+                          ? null
+                          : () => _compose(),
+                      backgroundColor: ForumColors.accent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(),
+                      elevation: 8,
+                      icon: Icon(Icons.add, size: 20),
+                      label: Text(
+                        _isThread ? '回复' : '发新串',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
                     ),
-                  ),
+            ),
           );
           // DrawerController disables drag opening on desktop platforms, even
           // in a narrow web viewport. Supply a content-wide horizontal gesture

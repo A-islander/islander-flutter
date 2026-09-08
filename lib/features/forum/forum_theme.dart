@@ -53,8 +53,8 @@ ThemeData forumTheme({Brightness brightness = Brightness.light}) {
     scaffoldBackgroundColor: colors.canvas,
     pageTransitionsTheme: PageTransitionsTheme(
       builders: {
-        ...const PageTransitionsTheme().builders,
-        TargetPlatform.android: const ForumBackTransitionsBuilder(),
+        for (final platform in TargetPlatform.values)
+          platform: const ForumBackTransitionsBuilder(),
       },
     ),
     colorScheme: ColorScheme.fromSeed(

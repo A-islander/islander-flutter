@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/forum/forum_screen.dart';
 import '../../features/forum/application/site_scope.dart';
+import '../../features/forum/forum_motion.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -9,6 +10,7 @@ class AppRouter {
   static String initialLocation = '/plate/0';
   static final router = GoRouter(
     navigatorKey: rootNavigatorKey,
+    observers: [forumMotionObserver],
     initialLocation: initialLocation,
     routes: [
       for (final site in ['x', 'bog']) ...[

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:islander_flutter/features/forum/forum_theme.dart';
+import 'package:islander_flutter/features/forum/forum_motion.dart';
 
 Future<void> backEvent(
   WidgetTester tester,
@@ -46,13 +47,16 @@ Future<GlobalKey<NavigatorState>> launch(
       builder: (_) => PopScope(
         canPop: !blockPop,
         child: Scaffold(
-          key: const Key('detail-page'),
+          key: const Key('detail-shell'),
           appBar: AppBar(title: const Text('detail-title')),
-          body: SizedBox.expand(
-            child: ListView.builder(
-              itemCount: 50,
-              itemBuilder: (_, index) =>
-                  SizedBox(height: 80, child: Text('row $index')),
+          body: ForumReadingTransition(
+            child: SizedBox.expand(
+              key: const Key('detail-page'),
+              child: ListView.builder(
+                itemCount: 50,
+                itemBuilder: (_, index) =>
+                    SizedBox(height: 80, child: Text('row $index')),
+              ),
             ),
           ),
         ),
@@ -78,7 +82,13 @@ void main() {
     await backEvent(tester, 'startBackGesture');
     await backEvent(tester, 'updateBackGestureProgress', progress: .6, y: 500);
     expect(tester.getRect(page), original);
-    expect(find.byKey(const ValueKey('forum-back-scale')), findsNothing);
+    expect(
+      tester
+          .widget<Transform>(find.byKey(const ValueKey('forum-reading-scale')))
+          .transform
+          .getMaxScaleOnAxis(),
+      1,
+    );
     await backEvent(tester, 'cancelBackGesture');
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
@@ -128,43 +138,47 @@ void main() {
   });
 
   for (final edge in [0, 1]) {
-    testWidgets('edge $edge scales the whole page uniformly down to 92%', (
-      tester,
-    ) async {
-      await launch(tester);
-      final page = find.byKey(const Key('detail-page'));
-      final title = find.text('detail-title');
-      final original = tester.getRect(page);
-      final originalTitle = tester.getRect(title);
-      await backEvent(tester, 'startBackGesture', edge: edge);
-      for (final progress in [0.0, .25, .6, 1.0]) {
-        await backEvent(
-          tester,
-          'updateBackGestureProgress',
-          edge: edge,
-          progress: progress,
+    testWidgets(
+      'edge $edge scales only reading down to 92% with a fixed topbar',
+      (tester) async {
+        await launch(tester);
+        final page = find.byKey(const Key('detail-page'));
+        final title = find.text('detail-title');
+        final original = tester.getRect(page);
+        final originalTitle = tester.getRect(title);
+        await backEvent(tester, 'startBackGesture', edge: edge);
+        for (final progress in [0.0, .25, .6, 1.0]) {
+          await backEvent(
+            tester,
+            'updateBackGestureProgress',
+            edge: edge,
+            progress: progress,
+          );
+          final current = tester.getRect(page);
+          final scale = 1 - .08 * progress;
+          expect(current.width, closeTo(original.width * scale, .01));
+          expect(current.height, closeTo(original.height * scale, .01));
+          expect(current.center.dx, closeTo(original.center.dx, .01));
+          expect(current.center.dy, closeTo(original.center.dy, .01));
+          final currentTitle = tester.getRect(title);
+          expect(currentTitle, originalTitle);
+        }
+        await backEvent(tester, 'cancelBackGesture');
+        await tester.pump(const Duration(milliseconds: 156));
+        await tester.pump();
+        expect(tester.getRect(page), original);
+        expect(
+          tester
+              .widget<Transform>(
+                find.byKey(const ValueKey('forum-reading-scale')),
+              )
+              .transform
+              .getMaxScaleOnAxis(),
+          1,
         );
-        final current = tester.getRect(page);
-        final scale = 1 - .08 * progress;
-        expect(current.width, closeTo(original.width * scale, .01));
-        expect(current.height, closeTo(original.height * scale, .01));
-        expect(current.center.dx, closeTo(original.center.dx, .01));
-        expect(current.center.dy, closeTo(original.center.dy, .01));
-        final currentTitle = tester.getRect(title);
-        final expectedTitleCenter =
-            original.center + (originalTitle.center - original.center) * scale;
-        expect(currentTitle.width, closeTo(originalTitle.width * scale, .01));
-        expect(currentTitle.height, closeTo(originalTitle.height * scale, .01));
-        expect(currentTitle.center.dx, closeTo(expectedTitleCenter.dx, .01));
-        expect(currentTitle.center.dy, closeTo(expectedTitleCenter.dy, .01));
-      }
-      await backEvent(tester, 'cancelBackGesture');
-      await tester.pump(const Duration(milliseconds: 156));
-      await tester.pump();
-      expect(tester.getRect(page), original);
-      expect(find.byKey(const ValueKey('forum-back-scale')), findsNothing);
-      expect(tester.takeException(), isNull);
-    });
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     for (final releaseProgress in [.6, 1.0]) {
       testWidgets(
@@ -211,7 +225,13 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -300));
     await tester.pumpAndSettle();
     expect(tester.getRect(find.byKey(const Key('detail-page'))), original);
-    expect(find.byKey(const ValueKey('forum-back-scale')), findsNothing);
+    expect(
+      tester
+          .widget<Transform>(find.byKey(const ValueKey('forum-reading-scale')))
+          .transform
+          .getMaxScaleOnAxis(),
+      1,
+    );
     expect(find.text('row 0'), findsNothing);
   });
 
@@ -224,7 +244,13 @@ void main() {
     await backEvent(tester, 'startBackGesture');
     await backEvent(tester, 'updateBackGestureProgress', progress: .8);
     expect(tester.getRect(page), original);
-    expect(find.byKey(const ValueKey('forum-back-scale')), findsNothing);
+    expect(
+      tester
+          .widget<Transform>(find.byKey(const ValueKey('forum-reading-scale')))
+          .transform
+          .getMaxScaleOnAxis(),
+      1,
+    );
     await backEvent(tester, 'cancelBackGesture');
     expect(tester.takeException(), isNull);
   });

@@ -74,6 +74,21 @@ class Post {
   bool get isSaged => status == 1;
   bool get isDeleted => status == 2;
 
+  /// The identity is scoped to the referenced thread and site, never a nickname.
+  bool isOriginalPosterOf(Post? thread) {
+    if (thread == null ||
+        !thread.isRoot ||
+        site.instanceKey != thread.site.instanceKey) {
+      return false;
+    }
+    if (key == thread.key) return true;
+    if (parentUnknown || followId != thread.id) return false;
+    if (site.isIslander) return userId > 0 && userId == thread.userId;
+    // Public staff labels and missing IDs do not identify a unique author.
+    final hash = RegExp(r'^[A-Za-z0-9]{7,12}$');
+    return hash.hasMatch(authorId) && authorId == thread.authorId;
+  }
+
   factory Post.fromJson(Map<String, dynamic> json) {
     List<int> parseIntList(dynamic val) {
       if (val == null) return [];

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'forum_motion.dart';
 
-/// Android predictive back that shrinks toward the page center from either edge.
+/// Predictive back progress is shared only with the reading pane, not chrome.
 /// Uses public route APIs so PopScope, dialogs and system gesture cancellation
 /// keep their normal behavior. No in-page drag recognizers are installed.
 class ForumBackTransitionsBuilder extends PageTransitionsBuilder {
@@ -158,43 +159,39 @@ class _ForumBackTransitionState extends State<_ForumBackTransition>
     ]),
     child: widget.child,
     builder: (context, child) {
-      if (MediaQuery.disableAnimationsOf(context)) return child!;
-      if (!_gestureInProgress.value) {
-        return const FadeForwardsPageTransitionsBuilder().buildTransitions(
-          widget.route,
-          context,
-          widget.animation,
-          widget.secondaryAnimation,
-          child!,
+      if (MediaQuery.disableAnimationsOf(context)) {
+        return ForumBackMotion(child: child!);
+      }
+      if (!_gestureInProgress.value || !_participating) {
+        final reverse = widget.animation.status == AnimationStatus.reverse;
+        final progress = 1 - widget.animation.value;
+        return ForumBackMotion(
+          scale: reverse ? 1 - Curves.easeOutCubic.transform(progress) : 1,
+          opacity: reverse
+              ? 1 - Curves.easeIn.transform(progress)
+              : Curves.easeOut.transform(widget.animation.value),
+          radius: reverse ? 28 * progress : 0,
+          blockInput: widget.animation.status != AnimationStatus.completed,
+          child: child!,
         );
       }
-      // Keep the destination stationary while the outgoing page shrinks.
-      if (!_participating) return child!;
       final progress = (1 - widget.animation.value).clamp(0.0, 1.0);
       final startScale = 1 - .08 * _commitStart;
       final scale = _committing
           ? startScale * (1 - Curves.easeOutCubic.transform(progress))
           : 1 - .08 * progress;
-      return IgnorePointer(
-        child: Opacity(
-          opacity: _committing ? 1 - Curves.easeIn.transform(progress) : 1,
-          child: Transform.scale(
-            key: const ValueKey('forum-back-scale'),
-            alignment: Alignment.center,
-            scale: scale,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(
-                28 *
-                    Curves.easeOutCubic.transform(
-                      _committing
-                          ? _commitStart + (1 - _commitStart) * progress
-                          : progress,
-                    ),
-              ),
-              child: child,
+      return ForumBackMotion(
+        scale: scale,
+        opacity: _committing ? 1 - Curves.easeIn.transform(progress) : 1,
+        radius:
+            28 *
+            Curves.easeOutCubic.transform(
+              _committing
+                  ? _commitStart + (1 - _commitStart) * progress
+                  : progress,
             ),
-          ),
-        ),
+        blockInput: true,
+        child: child!,
       );
     },
   );

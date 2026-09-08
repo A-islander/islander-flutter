@@ -2,6 +2,45 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+/// One phase for every forum route, so navigation never restarts the sea.
+class PixelShoreClock extends StatefulWidget {
+  const PixelShoreClock({super.key, required this.child});
+  final Widget child;
+  @override
+  State<PixelShoreClock> createState() => _PixelShoreClockState();
+}
+
+class _PixelShoreClockState extends State<PixelShoreClock>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _clock = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 8),
+  );
+  @override
+  Widget build(BuildContext context) {
+    final reduce = MediaQuery.disableAnimationsOf(context);
+    if (reduce) {
+      _clock.stop();
+    } else if (!_clock.isAnimating) {
+      _clock.repeat();
+    }
+    return _ShoreClock(animation: _clock, child: widget.child);
+  }
+
+  @override
+  void dispose() {
+    _clock.dispose();
+    super.dispose();
+  }
+}
+
+class _ShoreClock extends InheritedWidget {
+  const _ShoreClock({required this.animation, required super.child});
+  final Animation<double> animation;
+  @override
+  bool updateShouldNotify(_ShoreClock old) => animation != old.animation;
+}
+
 class PixelShore extends StatefulWidget {
   const PixelShore({super.key, required this.height});
 
@@ -33,8 +72,15 @@ class _PixelShoreState extends State<PixelShore>
   @override
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    if (reduceMotion && _controller.isAnimating) _controller.stop();
-    if (!reduceMotion && !_controller.isAnimating) _controller.repeat();
+    final shared = context
+        .dependOnInheritedWidgetOfExactType<_ShoreClock>()
+        ?.animation;
+    if ((reduceMotion || shared != null) && _controller.isAnimating) {
+      _controller.stop();
+    }
+    if (!reduceMotion && shared == null && !_controller.isAnimating) {
+      _controller.repeat();
+    }
     final shore = IgnorePointer(
       child: RepaintBoundary(
         child: SizedBox(
@@ -42,7 +88,7 @@ class _PixelShoreState extends State<PixelShore>
           width: double.infinity,
           child: CustomPaint(
             painter: _PixelShorePainter(
-              animation: _controller,
+              animation: shared ?? _controller,
               reduceMotion: reduceMotion,
             ),
           ),

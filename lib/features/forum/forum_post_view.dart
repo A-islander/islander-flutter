@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'forum_preview_text.dart';
+import 'image_viewer.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:video_player/video_player.dart';
@@ -26,6 +27,7 @@ class ForumPostView extends ConsumerStatefulWidget {
     this.highlighted = false,
     this.depth = 0,
     this.ancestors = const {},
+    this.threadRoot,
   });
   final Post post;
   final String boardName;
@@ -37,18 +39,49 @@ class ForumPostView extends ConsumerStatefulWidget {
   final VoidCallback? onChanged;
   final int depth;
   final Set<PostKey> ancestors;
+  final Post? threadRoot;
   @override
   ConsumerState<ForumPostView> createState() => _ForumPostViewState();
 }
 
 class _ForumPostViewState extends ConsumerState<ForumPostView> {
   final _quotes = <int, Future<Post>>{};
+  final _quoteRoots = <PostKey, Future<Post>>{};
   Timer? _previewTimer;
   int _previewGeneration = 0;
   List<Post>? _hoverReplies;
   bool _previewBusy = false;
   bool _busy = false;
   late Post _post = widget.post;
+
+  Widget _quotedPost(Post quoted) {
+    Widget view(Post? root) => ForumPostView(
+      post: quoted,
+      threadRoot: root,
+      boardName: '',
+      depth: widget.depth + 1,
+      ancestors: {...widget.ancestors, _post.key},
+      onReply: widget.onReply,
+    );
+    if (quoted.isRoot || quoted.parentUnknown) {
+      return view(quoted.isRoot ? quoted : null);
+    }
+    final root = _post.isRoot ? _post : widget.threadRoot;
+    if (root != null &&
+        quoted.followId == root.id &&
+        quoted.site.instanceKey == root.site.instanceKey) {
+      return view(root);
+    }
+    final key = PostKey(quoted.site.instanceKey, '${quoted.followId}');
+    return FutureBuilder<Post>(
+      future: _quoteRoots.putIfAbsent(
+        key,
+        () => ref.read(forumRepositoryProvider).thread(quoted.followId),
+      ),
+      builder: (_, snapshot) => view(snapshot.data),
+    );
+  }
+
   @override
   void didUpdateWidget(covariant ForumPostView oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -58,7 +91,10 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
       _previewGeneration++;
       _previewBusy = false;
       _hoverReplies = null;
-      if (oldWidget.post.key != widget.post.key) _quotes.clear();
+      if (oldWidget.post.key != widget.post.key) {
+        _quotes.clear();
+        _quoteRoots.clear();
+      }
     }
   }
 
@@ -378,6 +414,10 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
+                          if (p.isOriginalPosterOf(
+                            p.isRoot ? p : widget.threadRoot,
+                          ))
+                            _PoBadge(postId: p.id),
                           Text(
                             dates.DateUtils.formatTimestamp(p.time),
                             style: TextStyle(
@@ -499,7 +539,15 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
                       runSpacing: 8,
                       children: media
                           .take(widget.preview ? 3 : 5)
-                          .map((m) => _MediaPreview(item: m))
+                          .indexed
+                          .map(
+                            (entry) => _MediaPreview(
+                              item: entry.$2,
+                              site: p.site.id,
+                              postId: p.id,
+                              index: entry.$1 + 1,
+                            ),
+                          )
                           .toList(),
                     ),
                   ),
@@ -538,9 +586,25 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
                                   ),
                                   child: Padding(
                                     padding: EdgeInsets.symmetric(vertical: 5),
-                                    child: Text(
-                                      forumPreviewText(
-                                        '${reply.name}: ${reply.value}',
+                                    child: Text.rich(
+                                      TextSpan(
+                                        children: [
+                                          if (reply.isOriginalPosterOf(p))
+                                            TextSpan(
+                                              text: 'PO ',
+                                              style: TextStyle(
+                                                color: ForumPalette.of(
+                                                  context,
+                                                ).accent,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
+                                          TextSpan(
+                                            text: forumPreviewText(
+                                              '${reply.name}: ${reply.value}',
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -608,13 +672,7 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
                                 ),
                                 child: Text('前往 No.${entry.key} 所在串 →'),
                               ),
-                            ForumPostView(
-                              post: snapshot.data!,
-                              boardName: '',
-                              depth: widget.depth + 1,
-                              ancestors: {...widget.ancestors, _post.key},
-                              onReply: widget.onReply,
-                            ),
+                            _quotedPost(snapshot.data!),
                           ],
                         );
                       },
@@ -636,9 +694,41 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
   }
 }
 
+class _PoBadge extends StatelessWidget {
+  const _PoBadge({required this.postId});
+  final int postId;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: '串主',
+    child: Container(
+      key: ValueKey('post-po-$postId'),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: ForumPalette.of(context).soft,
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        'PO',
+        style: TextStyle(
+          color: ForumPalette.of(context).accent,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    ),
+  );
+}
+
 class _MediaPreview extends StatelessWidget {
-  const _MediaPreview({required this.item});
+  const _MediaPreview({
+    required this.item,
+    required this.site,
+    required this.postId,
+    required this.index,
+  });
   final MediaItem item;
+  final String site;
+  final int postId, index;
   @override
   Widget build(BuildContext context) => InkWell(
     onTap: () => showDialog<void>(
@@ -654,18 +744,11 @@ class _MediaPreview extends StatelessWidget {
               Positioned.fill(
                 child: item.type == 'video'
                     ? _VideoViewer(url: item.url)
-                    : InteractiveViewer(
-                        minScale: .5,
-                        maxScale: 5,
-                        child: Image.network(
-                          item.url,
-                          errorBuilder: (_, error, stack) => Center(
-                            child: Text(
-                              '图片加载失败',
-                              style: TextStyle(color: Colors.white),
-                            ),
-                          ),
-                        ),
+                    : ForumImageViewer(
+                        item: item,
+                        site: site,
+                        postId: postId,
+                        index: index,
                       ),
               ),
               Positioned(

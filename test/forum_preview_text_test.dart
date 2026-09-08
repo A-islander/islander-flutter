@@ -52,7 +52,7 @@ void main() {
         await pumpForum(tester, fixture, size: const Size(390, 844));
         expect(find.text('标题 续行'), findsOneWidget);
         final body = find.text(forumPreviewText(fixture.body));
-        final reply = find.text('测试岛民: ${forumPreviewText(fixture.body)}');
+        final reply = find.text('PO 测试岛民: ${forumPreviewText(fixture.body)}');
         expect(body, findsOneWidget);
         expect(reply, findsOneWidget);
         expect(tester.widget<Text>(body).maxLines, 3);

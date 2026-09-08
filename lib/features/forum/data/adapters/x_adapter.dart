@@ -95,7 +95,7 @@ class XAdapter extends ExternalAdapter {
       parentUnknown: unknown,
       boardKey: '${row['fid'] ?? ''}',
       plateId: ExternalAdapter.number(row['fid']),
-      authorId: author,
+      authorId: ExternalAdapter.number(row['admin']) == 0 ? author : '',
       name: name.isEmpty ? author : '$name / $author',
       title: _name(row['title']),
       value: body,
