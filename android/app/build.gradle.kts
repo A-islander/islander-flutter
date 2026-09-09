@@ -101,6 +101,7 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.islander.islander_flutter"
+        manifestPlaceholders["appLabel"] = "岛民岛"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -128,6 +129,8 @@ android {
 
     buildTypes {
         getByName("debug") {
+            applicationIdSuffix = ".debug"
+            manifestPlaceholders["appLabel"] = "岛民岛调试版"
             signingConfig = signingConfigs.getByName("debug")
         }
         release {

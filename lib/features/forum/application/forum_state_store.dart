@@ -48,7 +48,7 @@ class ForumStateStore {
       (s) => s.id == siteId && s.instanceKey == instance,
     );
     if (matches.isEmpty) return null;
-    // Startup does not restore private routes until the matching identity loads.
+    // A cold start remembers the site only, never the previous reading route.
     return matches.first.route('/plate/0');
   }
 
@@ -57,35 +57,7 @@ class ForumStateStore {
     return route is String && safeRoute(route) ? route : null;
   }
 
-  Future<String?> startupRoute() async {
-    final fallback = lastRoute;
-    if (fallback == null) return null;
-    final site = ForumSite.byId(_data['lastSite'] as String);
-    String identity = 'anonymous';
-    if (site.isIslander) {
-      identity = storage.activeCookieId ?? 'anonymous';
-    } else {
-      try {
-        final raw = await storage.readExternalVault(site.instanceKey);
-        if (raw != null) {
-          final vault = jsonDecode(raw) as Map;
-          if (vault['version'] == 1 &&
-              vault['instance'] == site.instanceKey &&
-              vault['cookies'] is List &&
-              (vault['cookies'] as List).any(
-                (e) => e is Map && e['id'] == vault['activeId'],
-              )) {
-            identity = vault['activeId'] as String? ?? 'anonymous';
-          }
-        }
-      } catch (_) {
-        return fallback;
-      }
-    }
-    final saved = routeFor(scopeKey(site, identity));
-    if (saved == null || !belongsTo(site, saved)) return fallback;
-    return saved;
-  }
+  Future<String?> startupRoute() async => lastRoute;
 
   static bool belongsTo(ForumSite site, String route) =>
       safeRoute(route) &&
@@ -158,6 +130,7 @@ class ForumStateStore {
     bool newest = false,
     int? threadId,
     String title = '',
+    bool recordHistory = true,
     required int historyEpoch,
   }) {
     if (!belongsTo(site, route) ||
@@ -193,7 +166,7 @@ class ForumStateStore {
         }
         scope['positions'] = positions;
       }
-      if (threadId != null && allowed) {
+      if (threadId != null && allowed && recordHistory) {
         final rows = Map<String, dynamic>.from(scope['history'] as Map? ?? {});
         final now = DateTime.now().millisecondsSinceEpoch;
         rows['$threadId'] = {

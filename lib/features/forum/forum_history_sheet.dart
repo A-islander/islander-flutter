@@ -5,6 +5,7 @@ import 'application/external_identity.dart';
 import 'application/forum_state_store.dart';
 import 'forum_repository.dart';
 import 'forum_theme.dart';
+import '../local_cache/cache_providers.dart';
 
 class ForumHistorySheet extends ConsumerStatefulWidget {
   const ForumHistorySheet({super.key, required this.site});
@@ -18,6 +19,7 @@ class _ForumHistorySheetState extends ConsumerState<ForumHistorySheet> {
   String _query = '';
   String? _error;
   bool _busy = false;
+  bool _alsoCache = false;
   Future<void> _change(Future<void> Function() work) async {
     setState(() {
       _busy = true;
@@ -31,25 +33,44 @@ class _ForumHistorySheetState extends ConsumerState<ForumHistorySheet> {
     if (mounted) setState(() => _busy = false);
   }
 
-  Future<bool> _confirm(String title) async =>
-      await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(title),
-          content: const Text('只删除本机浏览记录和对应阅读位置，不删除帖子、饼干或草稿。'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('取消'),
+  Future<bool> _confirm(String title) async {
+    _alsoCache = false;
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => StatefulBuilder(
+            builder: (context, setDialog) => AlertDialog(
+              title: Text(title),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    '删除本机浏览记录和对应阅读位置，不删除服务器帖子、饼干或草稿。正文缓存独立保存，仍可能出现在本地搜索中。',
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('同时清理对应本地缓存'),
+                    subtitle: const Text('永久保留内容除外'),
+                    value: _alsoCache,
+                    onChanged: (v) => setDialog(() => _alsoCache = v == true),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('取消'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('删除'),
+                ),
+              ],
             ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('删除'),
-            ),
-          ],
-        ),
-      ) ==
-      true;
+          ),
+        ) ==
+        true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = ref.watch(forumStateStoreProvider);
@@ -123,6 +144,14 @@ class _ForumHistorySheetState extends ConsumerState<ForumHistorySheet> {
                     : () async {
                         if (await _confirm('清空当前岛可见历史？') && mounted) {
                           await _change(() async {
+                            if (_alsoCache) {
+                              await ref
+                                  .read(cacheStoreProvider)
+                                  .removeHistoryContent(_site, {
+                                    identity ?? 'anonymous',
+                                    'anonymous',
+                                  });
+                            }
                             for (final key in scopes) {
                               await store.clear(key);
                             }
@@ -136,7 +165,12 @@ class _ForumHistorySheetState extends ConsumerState<ForumHistorySheet> {
                     ? null
                     : () async {
                         if (await _confirm('清空所有岛、所有身份的历史？') && mounted) {
-                          await _change(store.clearAll);
+                          await _change(() async {
+                            if (_alsoCache) {
+                              await ref.read(cacheStoreProvider).remove();
+                            }
+                            await store.clearAll();
+                          });
                         }
                       },
                 child: const Text('清空全部'),
@@ -173,12 +207,21 @@ class _ForumHistorySheetState extends ConsumerState<ForumHistorySheet> {
                     : () async {
                         if (await _confirm('删除 No.${row['id']} 的浏览记录？') &&
                             mounted) {
-                          await _change(
-                            () => store.clear(
+                          await _change(() async {
+                            if (_alsoCache) {
+                              await ref
+                                  .read(cacheStoreProvider)
+                                  .removeHistoryContent(_site, {
+                                    (row['scope'] as String).substring(
+                                      _site.instanceKey.length + 1,
+                                    ),
+                                  }, threadId: row['id'] as int);
+                            }
+                            await store.clear(
                               row['scope'] as String,
                               id: row['id'] as int,
-                            ),
-                          );
+                            );
+                          });
                         }
                       },
               ),

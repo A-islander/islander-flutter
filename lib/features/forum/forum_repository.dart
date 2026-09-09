@@ -30,6 +30,8 @@ class PostPage {
     this.nextPage,
     this.root,
     this.offset,
+    this.fromCache = false,
+    this.resolvedPage,
   });
   final List<Post> posts;
 
@@ -43,6 +45,8 @@ class PostPage {
   final String? nextPage;
   final Post? root;
   final int? offset;
+  final bool fromCache;
+  final int? resolvedPage;
 }
 
 /// Shared contract with numeric entrypoints as a temporary legacy route bridge.

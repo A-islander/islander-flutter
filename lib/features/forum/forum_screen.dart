@@ -17,8 +17,9 @@ import 'prepend_sliver.dart';
 import 'application/external_identity.dart';
 import 'external_cookie_sheet.dart';
 import 'application/forum_state_store.dart';
-import 'forum_history_sheet.dart';
 import 'forum_motion.dart';
+import '../local_cache/cache_providers.dart';
+import '../local_cache/cache_store.dart';
 
 final forumBoardsProvider = FutureProvider<List<Plate>>(
   (ref) => ref.watch(forumRepositoryProvider).plates(),
@@ -31,11 +32,18 @@ class ForumScreen extends ConsumerStatefulWidget {
     this.boardId = 0,
     this.postId = 0,
     this.boardKey,
+    this.restorePosition = true,
+    this.focusId,
+    this.initialPage,
+    this.localOnly = false,
   });
   final String kind;
   final int boardId;
   final int postId;
   final String? boardKey;
+  final bool restorePosition;
+  final int? focusId, initialPage;
+  final bool localOnly;
   @override
   ConsumerState<ForumScreen> createState() => _ForumScreenState();
 }
@@ -56,6 +64,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
   late String _identityScope;
   late int _historyEpoch;
   Timer? _saveTimer;
+  final Set<int> _cacheLeases = {};
   bool _disposed = false;
   int? _restoreAnchor;
   Map<String, dynamic>? _restore;
@@ -90,12 +99,13 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
   int _count = 0;
   int? _totalPages;
   bool _nextAvailable = false;
-  ForumRepository get _repo => ref.read(forumRepositoryProvider);
+  ForumRepository get _repo => ref.read(cachedForumRepositoryProvider);
   ForumSite get _site => _repo.site;
   int _request = 0;
   int? _retryPage;
   bool _retryLast = false;
   bool _loading = true;
+  bool _offlinePage = false;
   bool _newest = false;
   bool _showSearch = false;
   String? _error;
@@ -104,7 +114,8 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
   bool get _isThread => widget.kind == 'thread';
   bool get _isMine => widget.kind == 'mine';
   bool get _hasMore => !_exhausted && _nextAvailable;
-  bool get _hasPrevious => _startPage > 0 && !_previousExhausted;
+  bool get _hasPrevious =>
+      !_offlinePage && _startPage > 0 && !_previousExhausted;
   String get _pageRange =>
       _startPage == _page ? '${_page + 1}' : '${_startPage + 1}–${_page + 1}';
   int get _pages => _totalPages ?? 1;
@@ -121,17 +132,23 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
     _historyEpoch = _stateStore.epoch(
       _stateStore.scopeKey(_stateSite, _identityScope),
     );
-    _restore = _stateStore.position(
-      _stateStore.scopeKey(_stateSite, _identityScope),
-      _route,
-    );
+    _restore =
+        widget.restorePosition && widget.focusId == null && !widget.localOnly
+        ? _stateStore.position(
+            _stateStore.scopeKey(_stateSite, _identityScope),
+            _route,
+          )
+        : null;
     _restoreAnchor = _restore?['anchor'] as int?;
     _newest = _restore?['newest'] == true;
     WidgetsBinding.instance.addObserver(this);
     Future.microtask(() {
       if (!mounted) return;
       _stateStore.activate(_stateSite).catchError((Object _) => _stateError());
-      _load(resolve: true, page: _restore?['page'] as int?);
+      _load(
+        resolve: true,
+        page: widget.initialPage ?? _restore?['page'] as int?,
+      );
     });
   }
 
@@ -188,6 +205,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
           fraction: fraction,
           newest: _newest,
           historyEpoch: _historyEpoch,
+          recordHistory: false,
           threadId: _isThread ? _thread?.id : null,
           title: _thread?.title.isNotEmpty == true
               ? _thread!.title
@@ -202,18 +220,6 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
         ModalRoute.of(context)?.isCurrent == true) {
       _saveState();
     }
-  }
-
-  Future<void> _history() async {
-    _saveTimer?.cancel();
-    _saveState();
-    await _stateStore.flushed;
-    if (!mounted) return;
-    final route = await forumSheet<String>(
-      context,
-      ForumHistorySheet(site: _site),
-    );
-    if (mounted && route != null) context.push(route);
   }
 
   Future<void> _switchSite(ForumSite site) async {
@@ -265,7 +271,25 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
     _request++;
     _scroll.dispose();
     _search.dispose();
+    _cacheStore?.release(_cacheLeases.toList());
     super.dispose();
+  }
+
+  // A page owns its temporary LRU protection, not the long-lived repository.
+  CacheStore? _cacheStore;
+  Future<void> _protectCached(Iterable<Post> posts) async {
+    final store = ref.read(cacheStoreProvider);
+    _cacheStore = store;
+    final identity = _identityScope;
+    try {
+      for (final post in posts.where((p) => p.fromCache)) {
+        final row = await store.find(_stateSite, identity, post.id);
+        if (!mounted || _disposed || identity != _identityScope) return;
+        if (row != null && _cacheLeases.add(row.rowId)) {
+          store.protect([row.rowId]);
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _load({
@@ -295,11 +319,33 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
       _error = null;
       _notice = null;
     });
-    final repo = ref.read(forumRepositoryProvider);
+    final repo = ref.read(cachedForumRepositoryProvider);
+    final cacheGeneration = ref.read(cacheStoreProvider).generation;
     var thread = _thread;
-    int? highlight = _highlightId;
+    int? highlight = _highlightId ?? widget.focusId;
     String? notice;
     try {
+      if (widget.localOnly) {
+        final row = await ref
+            .read(cacheStoreProvider)
+            .find(repo.site, repo.identity, widget.postId);
+        if (row == null) throw const ForumFailure('这条本地缓存已清理');
+        await ref.read(cacheStoreProvider).touch([row.rowId]);
+        if (!mounted || ticket != _request) return;
+        setState(() {
+          _thread = null;
+          _posts = [row.post];
+          _postPages[row.post.id] = 0;
+          _count = 1;
+          _nextAvailable = false;
+          _page = 0;
+          _startPage = 0;
+          _loading = false;
+          _notice = '本地缓存 · 尚不知道所属串，仅展示这条引用内容';
+        });
+        unawaited(_protectCached([row.post]));
+        return;
+      }
       if (_isThread && repo.site.isIslander) {
         if (resolve || thread == null) {
           final target = await repo.post(widget.postId);
@@ -314,7 +360,14 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
             }
           } else {
             thread = target;
-            highlight = null;
+            highlight = widget.focusId;
+            if (highlight != null && highlight != thread.id && resolve) {
+              try {
+                currentPage = await repo.replyPage(thread.id, highlight);
+              } catch (_) {
+                notice = '按缓存页定位；该回复位置可能已变化';
+              }
+            }
           }
         } else {
           thread = await repo.post(thread.id);
@@ -327,6 +380,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
         postId: thread?.id ?? widget.postId,
         page: currentPage,
       );
+      currentPage = data.resolvedPage ?? currentPage;
       final maxPage = data.totalPages == null ? null : data.totalPages! - 1;
       if (maxPage != null && (loadLast || currentPage > maxPage)) {
         currentPage = maxPage;
@@ -393,8 +447,17 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
         }
       }
       if (!mounted || ticket != _request) return;
+      if (data.fromCache || thread?.fromCache == true) {
+        notice = '本地缓存 · 内容可能不完整，刷新可重试联网';
+      }
+      if (widget.focusId != null &&
+          widget.focusId != (data.root ?? thread)?.id &&
+          !data.posts.any((p) => p.id == widget.focusId)) {
+        notice = '${notice == null ? '' : '$notice；'}本页未找到目标回复，未扫描整个串';
+      }
       setState(() {
         _thread = data.root ?? thread;
+        _offlinePage = data.fromCache;
         _posts = {for (final post in data.posts) post.id: post}.values.toList();
         _postPages
           ..clear()
@@ -415,6 +478,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
         _notice = notice;
         _loading = false;
       });
+      unawaited(_protectCached([?_thread, ...data.posts]));
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || ticket != _request) return;
         if (_restore != null) {
@@ -439,7 +503,22 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
         } else if (_scroll.hasClients) {
           _scroll.jumpTo(0);
         }
-        if (ModalRoute.of(context)?.isCurrent == true) _saveState();
+        if (ModalRoute.of(context)?.isCurrent == true) {
+          _saveState();
+          if (_isThread && _thread != null && _thread!.isRoot) {
+            unawaited(
+              ref
+                  .read(cacheStoreProvider)
+                  .markBrowsed(
+                    repo.site,
+                    repo.identity,
+                    _thread!.id,
+                    expectedGeneration: cacheGeneration,
+                  )
+                  .catchError((Object _) {}),
+            );
+          }
+        }
       });
     } catch (error) {
       if (mounted && ticket == _request) {
@@ -514,7 +593,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
     });
     try {
       final data = await ref
-          .read(forumRepositoryProvider)
+          .read(cachedForumRepositoryProvider)
           .page(
             kind: widget.kind,
             boardId: widget.boardId,
@@ -529,16 +608,18 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
         for (final post in data.posts) {
           if (known.add(post.id)) {
             _posts.add(post);
-            _postPages[post.id] = nextPage;
+            _postPages[post.id] = data.resolvedPage ?? nextPage;
           }
         }
         _count = data.count;
-        _page = nextPage;
+        _page = data.resolvedPage ?? nextPage;
         _totalPages = data.totalPages;
         _nextAvailable = data.hasMore;
         _exhausted = data.posts.isEmpty;
         _loadingMore = false;
+        if (data.fromCache) _notice = '本地缓存 · 内容可能不完整，刷新可重试联网';
       });
+      unawaited(_protectCached(data.posts));
     } catch (error) {
       if (!mounted || ticket != _request) return;
       setState(() {
@@ -566,7 +647,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
     });
     try {
       final data = await ref
-          .read(forumRepositoryProvider)
+          .read(cachedForumRepositoryProvider)
           .page(
             kind: widget.kind,
             boardId: widget.boardId,
@@ -592,6 +673,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
         _prependPage = previousPage;
         _pendingPrependPage = previousPage;
         _loadingPrevious = false;
+        if (data.fromCache) _notice = '本地缓存 · 内容可能不完整，刷新可重试联网';
       });
     } catch (error) {
       if (!mounted || ticket != _request) return;
@@ -621,6 +703,12 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
   void _open(Post post) {
     _saveState();
     context.push(_site.route('/post/${post.id}'));
+  }
+
+  void _localSearch() {
+    _saveState();
+    _scaffold.currentState?.closeDrawer();
+    context.push('/local-search');
   }
 
   Future<void> _openPageJump(String title) async {
@@ -824,7 +912,11 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
             site: _site,
             boardKey: widget.boardKey ?? _thread?.boardKey,
             onSite: _switchSite,
-            onHistory: _history,
+            onLocalSearch: _localSearch,
+            onSettings: () {
+              _scaffold.currentState?.closeDrawer();
+              context.push('/settings');
+            },
             kind: widget.kind,
             boardId: _thread?.plateId ?? widget.boardId,
             boards: boards,
@@ -949,7 +1041,7 @@ class _ForumScreenState extends ConsumerState<ForumScreen>
                             onPressed: () =>
                                 setState(() => _showSearch = !_showSearch),
                             tooltip: '筛选与跳转',
-                            icon: Icon(Icons.search, size: 21),
+                            icon: Icon(Icons.filter_list, size: 21),
                           ),
                         if (!compact) SizedBox(width: 8),
                         if (compact)
@@ -1759,7 +1851,8 @@ class _ForumSidebar extends StatelessWidget {
     required this.onRetry,
     required this.site,
     required this.onSite,
-    required this.onHistory,
+    required this.onLocalSearch,
+    required this.onSettings,
     this.boardKey,
   });
   final String kind;
@@ -1770,7 +1863,7 @@ class _ForumSidebar extends StatelessWidget {
   final ForumSite site;
   final String? boardKey;
   final ValueChanged<ForumSite> onSite;
-  final VoidCallback onHistory;
+  final VoidCallback onLocalSearch, onSettings;
   @override
   Widget build(BuildContext context) => ColoredBox(
     color: ForumPalette.of(context).surface,
@@ -1800,10 +1893,16 @@ class _ForumSidebar extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               _NavItem(
-                index: '↺',
-                title: '最近浏览',
+                index: '⌕',
+                title: '浏览搜索',
                 selected: false,
-                onTap: onHistory,
+                onTap: onLocalSearch,
+              ),
+              _NavItem(
+                index: '⚙',
+                title: '设置',
+                selected: false,
+                onTap: onSettings,
               ),
               Padding(
                 padding: EdgeInsets.only(bottom: 10),

@@ -26,6 +26,63 @@ class _ForumImageViewerState extends ConsumerState<ForumImageViewer> {
   String? _message;
   double? _progress;
   bool _saving = false;
+  bool _menuOpen = false;
+
+  Future<void> _openOriginal() async {
+    final uri = Uri.tryParse(widget.item.url);
+    if (uri != null &&
+        ['http', 'https'].contains(uri.scheme) &&
+        uri.host.isNotEmpty &&
+        uri.userInfo.isEmpty) {
+      try {
+        if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+      } catch (_) {}
+    }
+    if (mounted) setState(() => _message = '无法打开原图');
+  }
+
+  Future<void> _showActions() async {
+    if (_menuOpen) return;
+    _menuOpen = true;
+    String? action;
+    try {
+      action = await showModalBottomSheet<String>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                key: const Key('image-menu-save'),
+                enabled: !_saving,
+                leading: const Icon(Icons.download_outlined),
+                title: Text(_saving ? '正在保存…' : '保存原图'),
+                onTap: _saving ? null : () => Navigator.pop(context, 'save'),
+              ),
+              ListTile(
+                key: const Key('image-menu-open'),
+                leading: const Icon(Icons.open_in_new),
+                title: const Text('打开原图'),
+                onTap: () => Navigator.pop(context, 'open'),
+              ),
+              ListTile(
+                key: const Key('image-menu-cancel'),
+                leading: const Icon(Icons.close),
+                title: const Text('取消'),
+                onTap: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        ),
+      );
+    } finally {
+      _menuOpen = false;
+    }
+    if (!mounted) return;
+    if (action == 'save') await _save();
+    if (action == 'open') await _openOriginal();
+  }
+
   Future<void> _save() async {
     if (_saving) return;
     setState(() {
@@ -80,7 +137,9 @@ class _ForumImageViewerState extends ConsumerState<ForumImageViewer> {
     children: [
       Positioned.fill(
         child: GestureDetector(
-          onLongPress: _save,
+          key: const Key('image-actions-target'),
+          behavior: HitTestBehavior.opaque,
+          onLongPress: _showActions,
           child: InteractiveViewer(
             minScale: .5,
             maxScale: 5,
@@ -102,22 +161,7 @@ class _ForumImageViewerState extends ConsumerState<ForumImageViewer> {
         child: Row(
           children: [
             IconButton(
-              onPressed: () async {
-                final uri = Uri.tryParse(widget.item.url);
-                if (uri != null &&
-                    ['http', 'https'].contains(uri.scheme) &&
-                    uri.userInfo.isEmpty) {
-                  try {
-                    if (await launchUrl(
-                      uri,
-                      mode: LaunchMode.externalApplication,
-                    )) {
-                      return;
-                    }
-                  } catch (_) {}
-                }
-                if (mounted) setState(() => _message = '无法打开原图');
-              },
+              onPressed: _openOriginal,
               tooltip: '打开原图',
               icon: const Icon(Icons.open_in_new, color: Colors.white),
             ),

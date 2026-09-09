@@ -13,6 +13,10 @@ import '../plate/models/post_model.dart';
 import 'cookie_sheet.dart';
 import 'forum_repository.dart';
 import 'forum_theme.dart';
+import '../local_cache/cache_providers.dart';
+import '../local_cache/cache_widgets.dart';
+import '../local_cache/cache_backup.dart';
+import '../local_cache/cached_post.dart';
 
 class ForumPostView extends ConsumerStatefulWidget {
   const ForumPostView({
@@ -76,7 +80,7 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
     return FutureBuilder<Post>(
       future: _quoteRoots.putIfAbsent(
         key,
-        () => ref.read(forumRepositoryProvider).thread(quoted.followId),
+        () => ref.read(cachedForumRepositoryProvider).thread(quoted.followId),
       ),
       builder: (_, snapshot) => view(snapshot.data),
     );
@@ -112,7 +116,7 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
     _previewTimer = Timer(const Duration(milliseconds: 180), () async {
       if (!mounted || generation != _previewGeneration) return;
       _previewBusy = true;
-      final repo = ref.read(forumRepositoryProvider);
+      final repo = ref.read(cachedForumRepositoryProvider);
       final identity = ref.read(authProvider).token;
       try {
         final page = await repo.page(kind: 'thread', postId: _post.id);
@@ -161,7 +165,7 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
       if (_quotes.containsKey(id)) {
         _quotes.remove(id);
       } else {
-        _quotes[id] = ref.read(forumRepositoryProvider).post(id);
+        _quotes[id] = ref.read(cachedForumRepositoryProvider).post(id);
       }
     });
   }
@@ -249,13 +253,87 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
     }
   }
 
+  Future<void> _cacheAction(String action) async {
+    final post = _post;
+    final store = ref.read(cacheStoreProvider);
+    final identity = ref.read(cacheIdentityProvider(post.site));
+    setState(() => _busy = true);
+    try {
+      var row = await store.find(post.site, identity, post.id);
+      if (!mounted) return;
+      if (action == 'cache-delete') {
+        if (row == null) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('这条内容未保存在本地')));
+          return;
+        }
+        if (!await confirmCacheAction(
+          context,
+          '删除 No.${post.id} 的本地缓存？',
+          '仅删除本机正文和对应浏览记录，不删除服务器帖子或阅读位置。${row.pinned ? '这条内容已永久保留，本次也会删除。' : ''}',
+        )) {
+          return;
+        }
+        if (!mounted ||
+            identity != ref.read(cacheIdentityProvider(post.site))) {
+          return;
+        }
+        await store.remove(ids: [row.rowId], includePinned: true);
+      } else if (action == 'cache-unpin') {
+        if (row != null) await store.pin([row.rowId], false);
+      } else {
+        if (identity != ref.read(cacheIdentityProvider(post.site))) return;
+        if (action == 'cache-pin') {
+          await store.capture(
+            post.site,
+            identity,
+            [post],
+            force: true,
+            pin: true,
+          );
+          row = await store.find(post.site, identity, post.id);
+        }
+        if (action == 'cache-export') {
+          final message = await saveCacheBackup([
+            row ?? CachedPost.snapshot(post),
+          ]);
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(message)));
+          }
+          return;
+        }
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(switch (action) {
+              'cache-pin' => '已永久保留；不会被自动清理',
+              'cache-unpin' => '已取消永久保留',
+              _ => '已删除本地缓存；再次联网加载可能重新保存',
+            }),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is FormatException ? error.message : '本地缓存操作失败，请重试',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Widget _actions(Post post, int userId) {
     final capabilities = ref.read(forumRepositoryProvider).capabilities;
-    if (!capabilities.sage &&
-        !capabilities.manage &&
-        (widget.preview || widget.onReply == null)) {
-      return const SizedBox.shrink();
-    }
     final palette = ForumPalette.of(context);
     PopupMenuItem<String> item(
       String value,
@@ -300,11 +378,17 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
         onSelected: (action) {
           if (action == 'reply') {
             widget.onReply?.call(post.id);
+          } else if (action.startsWith('cache-')) {
+            _cacheAction(action);
           } else {
             _action(action);
           }
         },
         itemBuilder: (_) => [
+          item('cache-pin', '永久保留', Icons.bookmark_add_outlined),
+          item('cache-unpin', '取消永久保留', Icons.bookmark_remove_outlined),
+          item('cache-export', '导出这条内容', Icons.file_upload_outlined),
+          item('cache-delete', '删除这条本地缓存', Icons.delete_sweep_outlined),
           if (!widget.preview) ...[
             if (widget.onReply != null)
               item('reply', '引用回复', Icons.reply_outlined),
@@ -649,7 +733,7 @@ class _ForumPostViewState extends ConsumerState<ForumPostView> {
                                 TextButton(
                                   onPressed: () => setState(() {
                                     _quotes[entry.key] = ref
-                                        .read(forumRepositoryProvider)
+                                        .read(cachedForumRepositoryProvider)
                                         .post(entry.key);
                                   }),
                                   child: Text('重试'),

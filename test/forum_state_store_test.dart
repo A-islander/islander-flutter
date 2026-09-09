@@ -75,13 +75,13 @@ void main() {
     historyEpoch: epoch ?? store.epoch(store.scopeKey(site, identity)),
   );
   test(
-    'last site and matching identity reading route survive a new store',
+    'cold start keeps the last site but opens its timeline; reading records remain',
     () async {
       final store = ForumStateStore(storage);
       await save(store, ForumSite.bog);
       await store.activate(ForumSite.bog);
       final restored = ForumStateStore(storage);
-      expect(await restored.startupRoute(), '/s/bog/post/10');
+      expect(await restored.startupRoute(), '/s/bog/plate/0');
       expect(
         restored.position(
           restored.scopeKey(ForumSite.bog, 'anonymous'),
@@ -93,6 +93,22 @@ void main() {
         restored.history(restored.scopeKey(ForumSite.x, 'anonymous')),
         isEmpty,
       );
+    },
+  );
+  test(
+    'every site starts at its timeline regardless of the saved route',
+    () async {
+      final store = ForumStateStore(storage);
+      for (final site in ForumSite.all) {
+        await save(store, site, identity: 'saved-identity');
+        await store.activate(site);
+        final restarted = ForumStateStore(storage);
+        expect(await restarted.startupRoute(), site.route('/plate/0'));
+        expect(
+          restarted.routeFor(restarted.scopeKey(site, 'saved-identity')),
+          site.route('/post/10'),
+        );
+      }
     },
   );
   test('same IDs and identity names never share history', () async {

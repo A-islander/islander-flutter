@@ -7,6 +7,7 @@ class Post {
   final String? boardKey;
   final bool parentUnknown;
   final String authorId;
+  final bool fromCache;
   ForumSite get site => source ?? ForumSite.islander;
   PostKey get key => PostKey(site.instanceKey, sourceId ?? '$id');
   bool get isRoot => !parentUnknown && followId == 0;
@@ -40,6 +41,7 @@ class Post {
     this.boardKey,
     this.parentUnknown = false,
     this.authorId = '',
+    this.fromCache = false,
     this.followId = 0,
     this.plateId = 0,
     this.status = 0,

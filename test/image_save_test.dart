@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -32,8 +33,104 @@ class ImageTransport implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
+Future<void> pumpImageViewer(
+  WidgetTester tester,
+  ImageSaveService service,
+) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [imageSaveProvider.overrideWithValue(service)],
+      child: const MaterialApp(
+        home: Scaffold(
+          body: ForumImageViewer(
+            item: MediaItem(
+              id: '1',
+              url: 'https://media.example/a.gif',
+              thumbnailUrl: 'https://media.example/thumb.gif',
+              type: 'image',
+            ),
+            site: 'islander',
+            postId: 10,
+            index: 1,
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  testWidgets(
+    'long press is inert until save is selected; all dismissals cancel',
+    (tester) async {
+      final transport = ImageTransport();
+      var saves = 0;
+      final service = ImageSaveService(
+        transport: Dio()..httpClientAdapter = transport,
+        sink: (_, name, mime) async {
+          saves++;
+          return '已保存到相册';
+        },
+      );
+      addTearDown(service.dispose);
+      await pumpImageViewer(tester, service);
+      for (final dismissal in ['cancel', 'back', 'barrier']) {
+        await tester.longPress(find.byKey(const Key('image-actions-target')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('image-menu-save')), findsOneWidget);
+        expect(find.byKey(const Key('image-menu-open')), findsOneWidget);
+        expect(transport.requests, isEmpty);
+        if (dismissal == 'cancel') {
+          await tester.tap(find.byKey(const Key('image-menu-cancel')));
+        } else if (dismissal == 'back') {
+          await tester.binding.handlePopRoute();
+        } else {
+          await tester.tapAt(const Offset(10, 10));
+        }
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('image-menu-save')), findsNothing);
+        expect(saves, 0);
+      }
+      await tester.longPress(find.byKey(const Key('image-actions-target')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('image-menu-save')));
+      await tester.pumpAndSettle();
+      expect(saves, 1);
+      expect(transport.requests, hasLength(1));
+      expect(find.text('已保存到相册'), findsOneWidget);
+    },
+  );
+
+  testWidgets('menu save is disabled while a toolbar save is in flight', (
+    tester,
+  ) async {
+    final transport = ImageTransport();
+    final gate = Completer<String>();
+    final service = ImageSaveService(
+      transport: Dio()..httpClientAdapter = transport,
+      sink: (_, name, mime) => gate.future,
+    );
+    addTearDown(service.dispose);
+    await pumpImageViewer(tester, service);
+    await tester.tap(find.byKey(const Key('image-save')));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.longPress(find.byKey(const Key('image-actions-target')));
+    await tester.pump(const Duration(milliseconds: 400));
+    final tile = tester.widget<ListTile>(
+      find.byKey(const Key('image-menu-save')),
+    );
+    expect(tile.enabled, isFalse);
+    expect(tile.onTap, isNull);
+    await tester.tap(find.byKey(const Key('image-menu-save')));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(transport.requests, hasLength(1));
+    await tester.tap(find.byKey(const Key('image-menu-cancel')));
+    gate.complete('已保存到相册');
+    await tester.pumpAndSettle();
+    expect(find.text('已保存到相册'), findsOneWidget);
+  });
   test('permission denial never attempts an album write', () async {
     final calls = <String>[];
     const channel = MethodChannel('gal');

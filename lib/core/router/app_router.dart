@@ -3,16 +3,40 @@ import 'package:go_router/go_router.dart';
 import '../../features/forum/forum_screen.dart';
 import '../../features/forum/application/site_scope.dart';
 import '../../features/forum/forum_motion.dart';
+import '../../features/local_cache/local_search_screen.dart';
+import '../../features/local_cache/cache_settings_screen.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 class AppRouter {
   static String initialLocation = '/plate/0';
+  static const freshTimeline = {'freshTimeline': true};
+  static bool _restorePosition(GoRouterState state) =>
+      state.extra is! Map || (state.extra as Map)['freshTimeline'] != true;
   static final router = GoRouter(
     navigatorKey: rootNavigatorKey,
     observers: [forumMotionObserver],
     initialLocation: initialLocation,
+    initialExtra: freshTimeline,
     routes: [
+      GoRoute(
+        path: '/local-search',
+        builder: (_, state) => ForumAuxiliaryTransition(
+          child: LocalSearchScreen(
+            pinnedOnly: state.uri.queryParameters['pinned'] == '1',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (_, _) =>
+            const ForumAuxiliaryTransition(child: LocalSettingsScreen()),
+      ),
+      GoRoute(
+        path: '/settings/cache',
+        builder: (_, _) =>
+            const ForumAuxiliaryTransition(child: CacheSettingsScreen()),
+      ),
       for (final site in ['x', 'bog']) ...[
         GoRoute(
           path: '/s/$site/plate/:boardKey',
@@ -23,6 +47,7 @@ class AppRouter {
               child: ForumScreen(
                 key: ValueKey('$site-board-$key'),
                 kind: key == '0' ? 'timeline' : 'board',
+                restorePosition: key != '0' || _restorePosition(state),
                 boardId: int.tryParse(key) ?? 0,
                 boardKey: key,
               ),
@@ -34,9 +59,14 @@ class AppRouter {
           builder: (context, state) => ExternalForumScope(
             siteId: site,
             child: ForumScreen(
-              key: ValueKey('$site-post-${state.pathParameters['postId']}'),
+              key: ValueKey('$site-post-${state.uri}'),
               kind: 'thread',
               postId: int.tryParse(state.pathParameters['postId']!) ?? 0,
+              focusId: int.tryParse(state.uri.queryParameters['focus'] ?? ''),
+              initialPage: int.tryParse(
+                state.uri.queryParameters['page'] ?? '',
+              )?.clamp(0, 1000000),
+              localOnly: state.uri.queryParameters['localOnly'] == '1',
             ),
           ),
         ),
@@ -51,6 +81,7 @@ class AppRouter {
           return ForumScreen(
             key: ValueKey('board-$plateId'),
             kind: plateId == 0 ? 'timeline' : 'board',
+            restorePosition: plateId != 0 || _restorePosition(state),
             boardId: plateId,
           );
         },
@@ -61,9 +92,14 @@ class AppRouter {
           final postId =
               int.tryParse(state.pathParameters['postId'] ?? '0') ?? 0;
           return ForumScreen(
-            key: ValueKey('post-$postId'),
+            key: ValueKey('post-${state.uri}'),
             kind: 'thread',
             postId: postId,
+            focusId: int.tryParse(state.uri.queryParameters['focus'] ?? ''),
+            initialPage: int.tryParse(
+              state.uri.queryParameters['page'] ?? '',
+            )?.clamp(0, 1000000),
+            localOnly: state.uri.queryParameters['localOnly'] == '1',
           );
         },
       ),

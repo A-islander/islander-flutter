@@ -22,6 +22,7 @@ Future<StorageService> pumpSites(
   WidgetTester tester,
   ExternalFixture fixture, {
   String route = '/s/x/plate/0',
+  ForumFixture? localFixture,
 }) async {
   tester.view.physicalSize = const Size(390, 844);
   tester.view.devicePixelRatio = 1;
@@ -39,7 +40,9 @@ Future<StorageService> pumpSites(
     ProviderScope(
       overrides: [
         storageServiceProvider.overrideWithValue(storage),
-        dioClientProvider.overrideWithValue(ForumFixture().client()),
+        dioClientProvider.overrideWithValue(
+          (localFixture ?? ForumFixture()).client(),
+        ),
         externalRepositoryProvider(
           'x',
         ).overrideWith((ref) => XAdapter(transport: fixture.client())),
@@ -82,6 +85,79 @@ ExternalFixture fixture({Completer<dynamic>? delayed}) => ExternalFixture((r) {
 });
 
 void main() {
+  for (final site in ForumSite.all) {
+    testWidgets(
+      '${site.id} fresh timeline ignores saved page and anchor without deleting history',
+      (tester) async {
+        final api = fixture();
+        final local = ForumFixture();
+        await pumpSites(
+          tester,
+          api,
+          route: site.route('/post/10'),
+          localFixture: local,
+        );
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(IslanderApp)),
+        );
+        final store = container.read(forumStateStoreProvider);
+        final identity = site.isIslander
+            ? container.read(authProvider).activeId!
+            : 'anonymous';
+        // Seed a legacy record: new screens now put visit timestamps in SQLite.
+        await store.save(
+          site: site,
+          identity: identity,
+          route: site.route('/post/10'),
+          page: 0,
+          threadId: 10,
+          historyEpoch: 0,
+        );
+        await store.save(
+          site: site,
+          identity: identity,
+          route: site.route('/plate/0'),
+          page: 3,
+          anchor: 999,
+          fraction: .6,
+          newest: true,
+          historyEpoch: 0,
+        );
+        api.requests.clear();
+        local.requests.clear();
+        AppRouter.router.go(
+          site.route('/plate/0'),
+          extra: AppRouter.freshTimeline,
+        );
+        await pumpFrames(tester);
+        if (site.isIslander) {
+          final requests = local.requests.where(
+            (r) => r.uri.path.endsWith('/forum/indexLast'),
+          );
+          expect(requests, isNotEmpty);
+          expect(requests.every((r) => r.queryParameters['page'] == 0), isTrue);
+        } else if (site.id == 'x') {
+          final requests = api.requests.where(
+            (r) => r.uri.pathSegments.last == 'timeline',
+          );
+          expect(requests, isNotEmpty);
+          expect(
+            requests.every((r) => r.uri.queryParameters['page'] == '1'),
+            isTrue,
+          );
+        } else {
+          expect(api.requests, isNotEmpty);
+          expect(
+            api.requests.every((r) => r.uri.pathSegments.last == '1'),
+            isTrue,
+          );
+        }
+        expect(find.byKey(const ValueKey('post-10')), findsOneWidget);
+        expect(store.history(store.scopeKey(site, identity)), isNotEmpty);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   testWidgets('wide hover delays previews and never creates reading history', (
     tester,
   ) async {
@@ -193,7 +269,14 @@ void main() {
       final history = ForumStateStore(
         storage,
       ).history(ForumStateStore(storage).scopeKey(ForumSite.x, 'anonymous'));
-      expect(history.map((r) => r['id']), [10]);
+      expect(history, isEmpty);
+      expect(
+        ForumStateStore(storage).position(
+          ForumStateStore(storage).scopeKey(ForumSite.x, 'anonymous'),
+          '/s/x/post/10',
+        ),
+        isNotNull,
+      );
       expect(tester.takeException(), isNull);
     },
   );

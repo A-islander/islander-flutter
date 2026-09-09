@@ -3,11 +3,11 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <application
         android:allowBackup="false"
-        android:label="岛民岛"
+        android:label="${appLabel}"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
-            android:name=".MainActivity"
+            android:name="com.islander.islander_flutter.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'forum_back_transition.dart';
 
@@ -69,6 +70,7 @@ ThemeData forumTheme({Brightness brightness = Brightness.light}) {
       outline: colors.line,
       outlineVariant: colors.line,
     ),
+    fontFamily: kIsWeb ? 'IslanderSans' : null,
     fontFamilyFallback: const [
       'Noto Sans CJK SC',
       'Source Han Sans SC',

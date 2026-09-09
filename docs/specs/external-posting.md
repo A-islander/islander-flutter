@@ -2,6 +2,8 @@
 
 日期：2026-09-08。开发分支 `feat/external-posting`，基于已发布 `v0.0.4`／`53b7810`。本功能未包含在该 Release，不修改其标签或附件。
 
+2026-09-09：本功能合并纳入 v0.0.5；发布范围及最新验证见 [版本说明](../releases/v0.0.5.md)。下文“本轮结果”为最初开发阶段记录。
+
 ## 范围与参考
 
 参照同工作区 `islander-cli/internal/forum/replies.go`、`docs/specs/external-replies.md` 与 `external-threads.md`，移植 TUI 的协议契约，不调用 Go 子进程或新增代理。现有 Flutter 布局、海浪、分层转场和编辑抽屉保持不变。

@@ -49,6 +49,38 @@ class ForumReadingTransition extends StatelessWidget {
   }
 }
 
+/// Utility pages consume the same centered/predictive back motion as threads.
+/// Forward navigation slides in from the left; reverse never slides sideways.
+class ForumAuxiliaryTransition extends StatelessWidget {
+  const ForumAuxiliaryTransition({super.key, required this.child});
+  final Widget child;
+  @override
+  Widget build(BuildContext context) {
+    final route = ModalRoute.of(context);
+    final animation = route?.animation;
+    if (animation == null || MediaQuery.disableAnimationsOf(context)) {
+      return child;
+    }
+    return AnimatedBuilder(
+      animation: animation,
+      child: ForumReadingTransition(child: child),
+      builder: (context, child) {
+        final entering =
+            animation.status == AnimationStatus.forward &&
+            route?.navigator?.userGestureInProgress != true;
+        return FractionalTranslation(
+          key: const ValueKey('forum-auxiliary-slide'),
+          translation: Offset(
+            entering ? Curves.easeOutCubic.transform(animation.value) - 1 : 0,
+            0,
+          ),
+          child: child,
+        );
+      },
+    );
+  }
+}
+
 /// The outgoing page must not double-paint translucent waves under the next one.
 class ForumCurrentShore extends StatelessWidget {
   const ForumCurrentShore({super.key, required this.height});
